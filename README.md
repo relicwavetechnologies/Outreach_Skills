@@ -115,12 +115,16 @@ skills-html/
 │   │   ├── log.sh                 # status/error helpers, last-error.md writer
 │   │   ├── memory.sh              # ~/.cache/html-skills/ init + JSON I/O + target/run helpers
 │   │   ├── csv.sh                 # RFC 4180 CSV parser (python3-backed)
+│   │   ├── outcomes.sh            # feedback.jsonl append/query + one-tap reply prompt
+│   │   ├── track.sh               # tracker inject + setup wizard + KV sync
 │   │   └── deploy.sh              # Vercel deploy state machine (production-grade)
 │   └── components/                # reusable HTML snippets skills paste into output
 │       ├── confidence-dot.html    # inline confidence indicators (high/medium/low)
 │       ├── sources-footer.html    # citations block at end of every report
 │       ├── insight-block.html     # the visual grammar for insight sections
-│       └── mailmerge-dashboard.html # batch summary: filter chips, copy-DM, open-all
+│       ├── mailmerge-dashboard.html # batch summary: filter chips, copy-DM, open-all
+│       ├── track.js               # ~2 KB privacy-respecting page tracker (opt-in)
+│       └── track-server.js        # Vercel KV serverless template (user-owned endpoint)
 ├── skills/
 │   ├── research-html/SKILL.md
 │   ├── present-html/SKILL.md
@@ -134,6 +138,8 @@ skills-html/
     ├── test-deploy-dryrun.sh   # offline state-machine tests (no network)
     ├── test-memory.sh          # memory.sh target/run/dedupe tests
     ├── test-csv.sh             # csv.sh parser tests (RFC 4180 quirks)
+    ├── test-outcomes.sh        # outcomes.sh + one-tap reply prompt tests
+    ├── test-track.sh           # track.sh inject/state/scaffold tests
     └── smoke-deploy.sh         # real Vercel deploy + teardown
 ```
 
@@ -210,6 +216,38 @@ What makes it more than a loop:
 Try it:
 > *"Mailmerge these 20 founders for me — CSV is at ~/Downloads/leads.csv"*
 
+## Outcomes — how the system learns whether anything worked
+
+Two signals feed one append-only event log at `~/.cache/html-skills/memory/outcomes/feedback.jsonl`:
+
+### 1. One-tap user feedback (zero setup, strongest signal)
+
+Next time you open Claude Code after an outreach, the skill notices pending past_outreach entries > 24h old and asks once:
+
+> *"Quick one before we start — John @ Acme (DMed 2d ago, SDR-hiring angle): reply / no reply / not yet?"*
+
+Two-tap. The update writes back to `targets/<slug>.json` (`past_outreach[i].outcome`) AND appends a `replied`/`no_reply`/`meeting_booked` event to `feedback.jsonl`. This is what makes the consolidation pass smarter than guessing.
+
+### 2. `track.js` — opt-in client-side tracker
+
+A ~2 KB script gets injected into every deployed outreach page when enabled. It emits `page_view`, `scroll_25/50/75/100`, `dwell_30s/60s/180s`, and `cta_click` events to a Vercel serverless endpoint **you own** (no third party, no cookies, no fingerprinting). Honors `Do Not Track`.
+
+One-time setup:
+```bash
+bash ~/.claude/skills/html-skills/shared/lib/track.sh setup --project relicwave-tracker
+# Walks through scaffolding api/track.js, enabling Vercel KV on your project,
+# setting HTML_SKILLS_TRACK_KEY, and deploying. Then:
+bash ~/.claude/skills/html-skills/shared/lib/track.sh set-endpoint https://your-tracker.vercel.app/api/track
+bash ~/.claude/skills/html-skills/shared/lib/track.sh enable
+```
+
+After that, every `outreach-html` and `mailmerge-html` deployment auto-injects the tracker. To pull events into local memory periodically:
+```bash
+export KV_REST_API_URL=...     # from your Vercel KV project's "Quick Start" tab
+export KV_REST_API_TOKEN=...
+bash ~/.claude/skills/html-skills/shared/lib/track.sh sync
+```
+
 ## Testing
 
 ```bash
@@ -217,12 +255,16 @@ Try it:
 bash tests/test-deploy-dryrun.sh   # 37 assertions on the deploy state machine
 bash tests/test-memory.sh          # 46 assertions on memory helpers
 bash tests/test-csv.sh             # 28 assertions on the CSV parser (quirks + edge cases)
+bash tests/test-outcomes.sh        # 22 assertions on outcomes + one-tap reply prompt
+bash tests/test-track.sh           # 23 assertions on tracker inject/state/scaffold
 
 # Real Vercel smoke test (creates + verifies + tears down a real deploy)
 export VERCEL_SMOKE_PROJECT=html-skills-smoke
 vercel login    # one-time
 bash tests/smoke-deploy.sh
 ```
+
+**Total: 156 offline assertions.**
 
 ---
 

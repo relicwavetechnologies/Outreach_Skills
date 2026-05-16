@@ -19,8 +19,8 @@ BASE_URL="https://raw.githubusercontent.com/${GITHUB_USERNAME}/${GITHUB_REPO}/${
 ALL_SKILLS=(research-html present-html deploy-html outreach-html mailmerge-html plan-html review-html editor-html)
 OUTREACH_BUNDLE=(research-html present-html deploy-html outreach-html mailmerge-html)
 SHARED_FILES=(profile.md design-tokens.css SCHEMAS.md)
-SHARED_LIB_FILES=(log.sh memory.sh deploy.sh csv.sh)
-SHARED_COMPONENT_FILES=(confidence-dot.html sources-footer.html insight-block.html mailmerge-dashboard.html)
+SHARED_LIB_FILES=(log.sh memory.sh deploy.sh csv.sh outcomes.sh track.sh)
+SHARED_COMPONENT_FILES=(confidence-dot.html sources-footer.html insight-block.html mailmerge-dashboard.html track.js track-server.js)
 
 # ── Colors (tput when available, fallback to ANSI) ───────────────────────
 # Guard tput failures so a missing $TERM doesn't kill the script under `set -e`.
