@@ -19,6 +19,7 @@ BASE_URL="https://raw.githubusercontent.com/${GITHUB_USERNAME}/${GITHUB_REPO}/${
 ALL_SKILLS=(research-html present-html deploy-html outreach-html plan-html review-html editor-html)
 OUTREACH_BUNDLE=(research-html present-html deploy-html outreach-html)
 SHARED_FILES=(profile.md design-tokens.css)
+SHARED_LIB_FILES=(log.sh memory.sh deploy.sh)
 
 # ── Colors (tput when available, fallback to ANSI) ───────────────────────
 # Guard tput failures so a missing $TERM doesn't kill the script under `set -e`.
@@ -140,7 +141,8 @@ network_error_msg() {
 for target in "${targets[@]}"; do
   install_root="${target}/skills/html-skills"
   shared_root="${install_root}/shared"
-  mkdir -p "$shared_root"
+  lib_root="${shared_root}/lib"
+  mkdir -p "$shared_root" "$lib_root"
 
   title "Installing to ${install_root}"
 
@@ -149,6 +151,18 @@ for target in "${targets[@]}"; do
     info "Downloading shared/${f}"
     if download "${BASE_URL}/shared/${f}" "${shared_root}/${f}"; then
       ok "shared/${f}"
+    else
+      network_error_msg
+      exit 1
+    fi
+  done
+
+  # Shared executable library (deploy state machine + helpers)
+  for f in "${SHARED_LIB_FILES[@]}"; do
+    info "Downloading shared/lib/${f}"
+    if download "${BASE_URL}/shared/lib/${f}" "${lib_root}/${f}"; then
+      chmod +x "${lib_root}/${f}"
+      ok "shared/lib/${f}"
     else
       network_error_msg
       exit 1
@@ -168,6 +182,50 @@ for target in "${targets[@]}"; do
     fi
   done
 done
+
+# ── 3b. Initialize per-user cache (memory skeleton + deploy state) ───────
+title "Initializing local cache"
+
+# Pick the most recent install_root to source memory.sh from. Both copies are
+# identical, so either works; we just need one to exist.
+init_root="${targets[0]}/skills/html-skills/shared/lib"
+if [ -f "${init_root}/memory.sh" ]; then
+  # shellcheck source=/dev/null
+  HTML_SKILLS_LIB="${init_root}" . "${init_root}/memory.sh"
+  memory::init
+  ok "Cache ready at ~/.cache/html-skills/"
+  dim "  memory/  — profile, voice, patterns, targets, runs, outcomes"
+  dim "  state/   — deploy.json (vercel setup + last deploy)"
+else
+  warn "Couldn't source memory.sh from ${init_root} — cache not pre-initialized."
+  dim "First skill run will create it automatically."
+fi
+
+# ── 3c. Optional dependency check (non-blocking) ─────────────────────────
+title "Checking optional dependencies"
+
+if command -v jq >/dev/null 2>&1; then
+  ok "jq found ($(jq --version 2>/dev/null))"
+else
+  warn "jq not installed — needed for state updates."
+  case "$(uname -s)" in
+    Darwin) dim "Install: brew install jq" ;;
+    Linux)  dim "Install: apt install jq  (or your distro's equivalent)" ;;
+    *)      dim "Install jq from https://stedolan.github.io/jq/" ;;
+  esac
+fi
+
+if command -v node >/dev/null 2>&1; then
+  ok "Node found ($(node --version 2>/dev/null))"
+else
+  dim "Node not found — deploy-html will install it the first time you ship a page."
+fi
+
+if command -v vercel >/dev/null 2>&1; then
+  ok "Vercel CLI found"
+else
+  dim "Vercel CLI not found — deploy-html will install it the first time you ship a page."
+fi
 
 # ── 4. Done — show usage ─────────────────────────────────────────────────
 cat <<EOF
