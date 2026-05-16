@@ -45,6 +45,7 @@ That's it. Restart your AI, and the skills are live.
 | **present-html**   | Turns any content into a scroll-driven, animated HTML presentation. Optional OTP gate.     |
 | **deploy-html**    | Puts any HTML file on a live URL via Vercel. First time it walks setup, then it's silent.  |
 | **outreach-html**  | Full pipeline — research a founder, build a personalized page, deploy, hand back the link. |
+| **mailmerge-html** | Batch outreach: CSV → N personalized pages → N URLs + DMs + one summary dashboard.        |
 | **plan-html**      | Interactive planning docs — process, system, project, or decision. Embedded visuals.       |
 | **review-html**    | Code/PR review as a visual HTML report — severity-coded findings, annotated diffs.         |
 | **editor-html**    | Generates a single-file HTML editor for your data (kanban, table, sortable, prompt tuner). |
@@ -110,25 +111,29 @@ skills-html/
 │   ├── profile.md              # your profile — read by every skill
 │   ├── design-tokens.css       # one design language across all outputs
 │   ├── SCHEMAS.md              # memory + run JSON schema contracts
-│   ├── lib/                    # executable helpers (NOT prose for the LLM)
-│   │   ├── log.sh              # status/error helpers, last-error.md writer
-│   │   ├── memory.sh           # ~/.cache/html-skills/ init + JSON I/O + target/run helpers
-│   │   └── deploy.sh           # Vercel deploy state machine (production-grade)
-│   └── components/             # reusable HTML snippets skills paste into output
-│       ├── confidence-dot.html # inline confidence indicators (high/medium/low)
-│       ├── sources-footer.html # citations block at end of every report
-│       └── insight-block.html  # the visual grammar for insight sections
+│   ├── lib/                       # executable helpers (NOT prose for the LLM)
+│   │   ├── log.sh                 # status/error helpers, last-error.md writer
+│   │   ├── memory.sh              # ~/.cache/html-skills/ init + JSON I/O + target/run helpers
+│   │   ├── csv.sh                 # RFC 4180 CSV parser (python3-backed)
+│   │   └── deploy.sh              # Vercel deploy state machine (production-grade)
+│   └── components/                # reusable HTML snippets skills paste into output
+│       ├── confidence-dot.html    # inline confidence indicators (high/medium/low)
+│       ├── sources-footer.html    # citations block at end of every report
+│       ├── insight-block.html     # the visual grammar for insight sections
+│       └── mailmerge-dashboard.html # batch summary: filter chips, copy-DM, open-all
 ├── skills/
 │   ├── research-html/SKILL.md
 │   ├── present-html/SKILL.md
 │   ├── deploy-html/SKILL.md
 │   ├── outreach-html/SKILL.md
+│   ├── mailmerge-html/SKILL.md
 │   ├── plan-html/SKILL.md
 │   ├── review-html/SKILL.md
 │   └── editor-html/SKILL.md
 └── tests/
     ├── test-deploy-dryrun.sh   # offline state-machine tests (no network)
     ├── test-memory.sh          # memory.sh target/run/dedupe tests
+    ├── test-csv.sh             # csv.sh parser tests (RFC 4180 quirks)
     └── smoke-deploy.sh         # real Vercel deploy + teardown
 ```
 
@@ -189,12 +194,29 @@ Full schemas in [`shared/SCHEMAS.md`](shared/SCHEMAS.md). Skills MUST go through
 
 The visual grammar for these lives in `shared/components/insight-block.html`. Skills paste the CSS once, then build one `<section data-kind="…">` per insight.
 
+## Batch outreach (mailmerge)
+
+`mailmerge-html` turns the one-at-a-time outreach pipeline into a batch engine. Feed a CSV; get N personalized pages + N suggested DMs + one summary dashboard.
+
+What makes it more than a loop:
+
+- **ICP clustering** — targets are bucketed by stage / size / industry from researched facts.
+- **Angle selection per cluster** — reads `patterns.json` (when populated) to pick the angle that's worked best for similar clusters in your past data. Falls back to `profile.json.pitch_angle`.
+- **Memory-aware** — skips re-research on targets known < 14 days, refuses to repeat any angle in a target's `past_outreach[]`, halts on severe risk flags.
+- **Dry-run preview** — first 3 targets ship → you eyeball → confirm → the rest run. Default-on for first batch / batches > 10.
+- **Cost guardrails** — bounded parallelism (3 / 5 depending on batch size), per-target timeout, total batch cost ceiling.
+- **Dashboard output** — one HTML file with filter chips (status / cluster), per-row Open / Copy-DM / Why-this-angle, an "Open all" button.
+
+Try it:
+> *"Mailmerge these 20 founders for me — CSV is at ~/Downloads/leads.csv"*
+
 ## Testing
 
 ```bash
 # Offline tests — no network, no vercel CLI required
 bash tests/test-deploy-dryrun.sh   # 37 assertions on the deploy state machine
 bash tests/test-memory.sh          # 46 assertions on memory helpers
+bash tests/test-csv.sh             # 28 assertions on the CSV parser (quirks + edge cases)
 
 # Real Vercel smoke test (creates + verifies + tears down a real deploy)
 export VERCEL_SMOKE_PROJECT=html-skills-smoke
