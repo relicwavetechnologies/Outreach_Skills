@@ -107,16 +107,71 @@ skills-html/
 ├── README.md
 ├── install.sh
 ├── shared/
-│   ├── profile.md          # your profile — read by every skill
-│   └── design-tokens.css   # one design language across all outputs
-└── skills/
-    ├── research-html/SKILL.md
-    ├── present-html/SKILL.md
-    ├── deploy-html/SKILL.md
-    ├── outreach-html/SKILL.md
-    ├── plan-html/SKILL.md
-    ├── review-html/SKILL.md
-    └── editor-html/SKILL.md
+│   ├── profile.md            # your profile — read by every skill
+│   ├── design-tokens.css     # one design language across all outputs
+│   └── lib/                  # executable helpers (NOT prose for the LLM)
+│       ├── log.sh            # status/error helpers, last-error.md writer
+│       ├── memory.sh         # ~/.cache/html-skills/ init + JSON state I/O
+│       └── deploy.sh         # Vercel deploy state machine (production-grade)
+├── skills/
+│   ├── research-html/SKILL.md
+│   ├── present-html/SKILL.md
+│   ├── deploy-html/SKILL.md
+│   ├── outreach-html/SKILL.md
+│   ├── plan-html/SKILL.md
+│   ├── review-html/SKILL.md
+│   └── editor-html/SKILL.md
+└── tests/
+    ├── test-deploy-dryrun.sh # offline state-machine tests (no network)
+    └── smoke-deploy.sh       # real Vercel deploy + teardown
+```
+
+## Per-user runtime cache
+
+Created on install (or on first skill run) at `~/.cache/html-skills/`:
+
+```
+~/.cache/html-skills/
+├── memory/
+│   ├── profile.json       # canonical user/company profile
+│   ├── voice.json         # learned voice attributes
+│   ├── patterns.json      # what's worked across runs
+│   ├── targets/           # per-target context (acme-corp.json, …)
+│   ├── runs/              # per-run logs
+│   └── outcomes/feedback.jsonl
+├── state/
+│   └── deploy.json        # vercel setup + last deploy URL (source of truth)
+└── last-error.md          # human-readable diagnostic on any failure
+```
+
+## Architecture: skills delegate to shell
+
+Skills are still Markdown that the AI reads. But operational logic — env checks,
+auth polling, deploy state transitions, error capture — lives in real executable
+scripts under `shared/lib/`. The skill markdown says *"call `deploy.sh ship FILE`
+and report the URL"*; the script does the actual work.
+
+This means:
+
+- **The Vercel auth-loop bug is gone.** After `vercel login`, the script polls
+  `vercel whoami` every 5s for up to 90s before declaring failure. No more
+  "auth landed but the skill stopped."
+- **Deploy state is a real state machine.** Phases are `fresh → awaiting-auth
+  → ready → deployed`. Stored as JSON in `~/.cache/html-skills/state/deploy.json`.
+- **Failures write a diagnostic file.** Every hard failure produces
+  `~/.cache/html-skills/last-error.md` with command, exit code, captured stderr,
+  and a suggested next step. Paste it into a bug report and you're done.
+
+## Testing
+
+```bash
+# Offline state-machine tests (no network, no vercel CLI required)
+bash tests/test-deploy-dryrun.sh
+
+# Real Vercel smoke test (creates + verifies + tears down a real deploy)
+export VERCEL_SMOKE_PROJECT=html-skills-smoke
+vercel login    # one-time
+bash tests/smoke-deploy.sh
 ```
 
 ---
