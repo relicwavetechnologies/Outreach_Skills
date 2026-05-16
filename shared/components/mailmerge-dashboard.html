@@ -1,0 +1,361 @@
+<!--
+  mailmerge-dashboard.html — single-file dashboard summarizing N outreach pages.
+
+  Skills paste the CSS once, then build one .row entry per target. The
+  dashboard supports:
+    - Sortable by status / angle / cluster (data-sort attributes)
+    - Filterable by cluster + status (data-filter)
+    - Copy-DM button per row (writes to clipboard)
+    - "Open all" bulk action
+    - Status pills: pending | shipped | failed | replied | meeting-booked
+    - Per-row "Why this angle" explainer (collapsible)
+
+  Inline minimal JS — no external libs.
+-->
+
+<!-- ── CSS ────────────────────────────────────────────────────────────── -->
+<style>
+.mm {
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: clamp(1.5rem, 4vw, 3rem);
+}
+.mm__head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border-soft, rgba(255,255,255,0.06));
+}
+.mm__title {
+  font-family: var(--font-display);
+  font-size: clamp(var(--fs-2xl), 4vw, var(--fs-4xl));
+  font-weight: var(--fw-semibold);
+  letter-spacing: -0.01em;
+  line-height: var(--lh-tight);
+}
+.mm__subtitle {
+  color: var(--text-secondary);
+  font-size: var(--fs-base);
+  margin-top: 0.35rem;
+}
+.mm__stats {
+  display: flex;
+  gap: 1.5rem;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  font-family: var(--font-mono);
+}
+.mm__stat strong {
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--fs-xl);
+  display: block;
+}
+
+/* Controls bar */
+.mm__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+.mm__chip {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-soft, rgba(255,255,255,0.08));
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.mm__chip:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+.mm__chip[aria-pressed="true"] {
+  background: var(--accent-primary);
+  color: white;
+  border-color: var(--accent-primary);
+}
+.mm__bulk {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border-soft, rgba(255,255,255,0.08));
+  cursor: pointer;
+}
+.mm__bulk:hover { border-color: var(--accent-primary); }
+
+/* Rows */
+.mm__rows { display: grid; gap: 0.5rem; }
+.mm__row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) max-content max-content minmax(0, 2fr) max-content;
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-soft, rgba(255,255,255,0.06));
+  border-radius: 12px;
+  transition: border-color .15s, background .15s;
+}
+.mm__row:hover { border-color: var(--text-muted); }
+.mm__row.is-hidden { display: none; }
+.mm__target { display: flex; flex-direction: column; gap: 0.15rem; }
+.mm__name {
+  font-family: var(--font-display);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  font-size: var(--fs-base);
+}
+.mm__company {
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+}
+.mm__cluster {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  white-space: nowrap;
+}
+.mm__status {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--status-color, var(--text-muted)) 18%, transparent);
+  color: var(--status-color, var(--text-secondary));
+  white-space: nowrap;
+}
+.mm__status[data-status="pending"]        { --status-color: var(--text-muted); }
+.mm__status[data-status="shipped"]        { --status-color: var(--accent-secondary); }
+.mm__status[data-status="failed"]         { --status-color: var(--accent-danger); }
+.mm__status[data-status="replied"]        { --status-color: var(--accent-success); }
+.mm__status[data-status="meeting-booked"] { --status-color: var(--accent-success); }
+.mm__angle {
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mm__actions { display: flex; gap: 0.4rem; }
+.mm__btn {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  padding: 0.35rem 0.7rem;
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border-soft, rgba(255,255,255,0.08));
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color .15s, color .15s;
+}
+.mm__btn:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
+.mm__btn--primary {
+  background: var(--accent-primary);
+  color: white;
+  border-color: var(--accent-primary);
+}
+.mm__btn--primary:hover { color: white; opacity: 0.92; }
+
+/* Expandable details (DM text + reasoning) */
+.mm__details {
+  grid-column: 1 / -1;
+  padding-top: 0.85rem;
+  margin-top: 0.5rem;
+  border-top: 1px dashed var(--border-soft, rgba(255,255,255,0.06));
+  display: none;
+  gap: 1rem;
+  grid-template-columns: 1fr 1fr;
+}
+.mm__row[aria-expanded="true"] .mm__details { display: grid; }
+.mm__panel-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: 0.4rem;
+}
+.mm__dm {
+  font-family: var(--font-body);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-relaxed);
+  white-space: pre-wrap;
+  background: var(--bg-secondary);
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-soft, rgba(255,255,255,0.04));
+}
+.mm__why {
+  font-family: var(--font-body);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-relaxed);
+}
+
+/* Toast */
+.mm__toast {
+  position: fixed;
+  bottom: 1.5rem; left: 50%;
+  transform: translateX(-50%) translateY(120%);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  padding: 0.6rem 1.2rem;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  border: 1px solid var(--accent-secondary);
+  transition: transform .25s var(--ease-smooth, ease-out);
+  z-index: 99;
+}
+.mm__toast.is-visible { transform: translateX(-50%) translateY(0); }
+
+@media (max-width: 720px) {
+  .mm__row { grid-template-columns: 1fr; }
+  .mm__head { grid-template-columns: 1fr; }
+  .mm__stats { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mm__chip, .mm__btn, .mm__row, .mm__toast { transition: none; }
+}
+@media print {
+  .mm__chip, .mm__bulk, .mm__btn, .mm__toast { display: none; }
+  .mm__row { background: #fff; border-color: #ccc; color: #111; }
+  .mm__row[aria-expanded] .mm__details { display: grid; }
+}
+</style>
+
+<!-- ── Markup template ────────────────────────────────────────────────── -->
+<section class="mm">
+  <header class="mm__head">
+    <div>
+      <h1 class="mm__title">Mailmerge — Series A AI shop, 17 targets</h1>
+      <p class="mm__subtitle">Generated <time datetime="YYYY-MM-DD">YYYY-MM-DD</time> · batch run <code>BATCH_ID</code></p>
+    </div>
+    <div class="mm__stats">
+      <div class="mm__stat"><strong>17</strong>total</div>
+      <div class="mm__stat"><strong>15</strong>shipped</div>
+      <div class="mm__stat"><strong>2</strong>failed</div>
+      <div class="mm__stat"><strong>0</strong>replied</div>
+    </div>
+  </header>
+
+  <!-- Filter chips. data-filter attributes drive the JS at the bottom. -->
+  <nav class="mm__controls" aria-label="Filter">
+    <button class="mm__chip" data-filter="all" aria-pressed="true">All</button>
+    <button class="mm__chip" data-filter="status:shipped">Shipped</button>
+    <button class="mm__chip" data-filter="status:replied">Replied</button>
+    <button class="mm__chip" data-filter="status:failed">Failed</button>
+    <button class="mm__chip" data-filter="cluster:series-a-ai">Cluster: Series-A AI</button>
+    <button class="mm__chip" data-filter="cluster:enterprise-saas">Cluster: Enterprise SaaS</button>
+    <button class="mm__bulk" id="mmOpenAll">Open all live URLs</button>
+  </nav>
+
+  <div class="mm__rows" id="mmRows">
+    <!-- Repeat one .mm__row per target. Skill fills these in. -->
+    <article class="mm__row"
+             data-status="shipped"
+             data-cluster="series-a-ai"
+             aria-expanded="false">
+      <div class="mm__target">
+        <span class="mm__name">John Smith</span>
+        <span class="mm__company">Acme Corp</span>
+      </div>
+      <span class="mm__cluster">Series-A AI</span>
+      <span class="mm__status" data-status="shipped">shipped</span>
+      <span class="mm__angle">SDR-hiring → scale outbound</span>
+      <div class="mm__actions">
+        <a class="mm__btn mm__btn--primary" href="https://acme-john.example.vercel.app" target="_blank" rel="noopener">Open</a>
+        <button class="mm__btn" data-action="copy-dm">Copy DM</button>
+        <button class="mm__btn" data-action="toggle">Details</button>
+      </div>
+
+      <div class="mm__details">
+        <div>
+          <div class="mm__panel-title">Suggested DM</div>
+          <div class="mm__dm" data-dm-text>John — saw you're hiring 3 SDRs. Built you a quick page on what that could look like with our setup. Code's 4271: https://acme-john.example.vercel.app. 90 seconds.</div>
+        </div>
+        <div>
+          <div class="mm__panel-title">Why this angle</div>
+          <div class="mm__why">Their freshest signal is the open SDR roles (greenhouse, posted 4 days ago). Past data shows hiring-mode founders open at 3× the rate of generic openers for your audience.</div>
+        </div>
+      </div>
+    </article>
+    <!-- /repeat -->
+  </div>
+
+  <div class="mm__toast" id="mmToast" role="status" aria-live="polite">Copied DM</div>
+</section>
+
+<script>
+(function () {
+  const rows = document.querySelectorAll('.mm__row');
+  const chips = document.querySelectorAll('.mm__chip[data-filter]');
+  const toast = document.getElementById('mmToast');
+
+  function showToast(text) {
+    toast.textContent = text;
+    toast.classList.add('is-visible');
+    setTimeout(() => toast.classList.remove('is-visible'), 1400);
+  }
+
+  // Filter chips
+  chips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      chips.forEach(c => c.setAttribute('aria-pressed', 'false'));
+      chip.setAttribute('aria-pressed', 'true');
+      const filter = chip.dataset.filter;
+      rows.forEach(row => {
+        if (filter === 'all') { row.classList.remove('is-hidden'); return; }
+        const [k, v] = filter.split(':');
+        row.classList.toggle('is-hidden', row.dataset[k === 'status' ? 'status' : 'cluster'] !== v);
+      });
+    });
+  });
+
+  // Per-row actions
+  document.querySelectorAll('[data-action="toggle"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const row = btn.closest('.mm__row');
+      const open = row.getAttribute('aria-expanded') === 'true';
+      row.setAttribute('aria-expanded', open ? 'false' : 'true');
+    });
+  });
+  document.querySelectorAll('[data-action="copy-dm"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const row = btn.closest('.mm__row');
+      const dm = row.querySelector('[data-dm-text]')?.textContent?.trim() ?? '';
+      try { await navigator.clipboard.writeText(dm); showToast('Copied DM'); }
+      catch { showToast('Clipboard blocked'); }
+    });
+  });
+
+  // Bulk: open all live URLs in new tabs (browser may block — fallback toast)
+  document.getElementById('mmOpenAll')?.addEventListener('click', () => {
+    const links = Array.from(document.querySelectorAll('.mm__row:not(.is-hidden) .mm__btn--primary'));
+    let opened = 0;
+    links.forEach(a => {
+      const w = window.open(a.href, '_blank', 'noopener');
+      if (w) opened++;
+    });
+    showToast(`Opened ${opened} of ${links.length}`);
+  });
+})();
+</script>
