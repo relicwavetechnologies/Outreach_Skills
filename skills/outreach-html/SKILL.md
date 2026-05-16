@@ -11,10 +11,17 @@ End-to-end personalized outreach pipeline. Research the target → build a one-o
 
 ## Step 0: Read Shared Context
 
-1. Read `../../shared/profile.md` — name, company, pitch angle, brand voice are LOAD-BEARING here. This whole pipeline personalizes around them.
+1. Read `../../shared/profile.md` (and `~/.cache/html-skills/memory/profile.json` if present — JSON wins). Pitch angle, brand voice, and signature phrases are LOAD-BEARING here.
 2. Read `../../shared/design-tokens.css` — copy into the HTML page's `<style>` block.
-3. Read `## User Preferences` AND `## Saved Config` at the bottom of this file.
-4. If `profile.md` is mostly `[will be learned]`, you MUST ask Step 1's "About your company" block this run, then write it to profile.md.
+3. Read `../../shared/SCHEMAS.md` once per session — that's the memory contract.
+4. Read `../../shared/components/{otp-gate,sources-footer,confidence-dot,insight-block}.html` — paste these into the HTML you generate where applicable.
+5. Read `## User Preferences` AND `## Saved Config` at the bottom of this file.
+6. If `profile.md`/`profile.json` are mostly empty, you MUST ask Step 1's "About your company" block this run, then write to BOTH.
+7. **Check for existing target file.** Slugify the company name. If `~/.cache/html-skills/memory/targets/<slug>.json` exists:
+   - **Read it** — facts, people, public quotes, past_outreach are all gold.
+   - Check `past_outreach[]` for prior attempts to THIS person. If found, surface to user: *"You DMed John on May 17 with the SDR-hiring angle, no reply yet. Want a different angle this time?"* and require an angle different from any in `do_not_use_angles` or unsuccessful past outreaches.
+   - If `research_freshness_score > 0.7` and `last_researched` within 14 days, **skip Step 2's research entirely** and go straight to Step 3 with stored facts.
+   - If older, do a quick refresh (Step 2 lite) and run diff mode.
 
 ## Step 1: Gather What You Need
 
@@ -47,33 +54,59 @@ Good: *"This is your first run — quick one: what does YOUR company do in one l
 
 Bad: *"Initialize company profile parameters."*
 
-## Step 2: Research The Target (INLINE — no dependency on research-html)
+## Step 2: Research The Target (slot-based, source-diversified)
 
-Use WebSearch, WebFetch, and any research tools available. Aim for **deep enough to write 2-3 specific, surprising lines about them** — not a Wikipedia entry.
+Same engine as `research-html`. Use WebSearch, WebFetch, etc. Aim for **deep enough to write 2-3 specific, surprising lines about them** — not a Wikipedia entry.
 
-**Must find:**
-- Company: what they actually do (in the founder's own words if possible — pull from their site's hero or their LinkedIn About).
-- Size & stage (employees, funding round, year founded).
-- Founder background — previous roles, their public voice (Twitter/LinkedIn posts, podcasts).
-- Their current process for the area YOU'RE selling into. (e.g. if you sell AI outreach, how are they doing outreach today? Job postings, sales hires, tools mentioned anywhere — all clues.)
-- Pain points — from reviews, job postings, founder's complaints on socials.
+**Build a slot plan first.** Slots needed for outreach (subset of research-html's deep dive):
+- `company_basics` — what they actually do (in the founder's own words — site hero or LinkedIn About).
+- `founder_basics` — previous roles, public voice (LinkedIn/Twitter/podcasts), values signals.
+- `their_current_process` — how they do TODAY what YOU sell (clues: job postings, hires, tools mentioned, public complaints). This is the heart of the workflow comparison.
+- `pain_signals` — reviews, job postings, founder complaints on socials.
+- `recent_news` — last 90 days.
 
-**Try to find:**
-- Recent news / product launches (last 3 months)
-- Tools/tech they use (BuiltWith, GitHub, job descriptions)
-- Who they consider competitors
+**Source diversification** — don't just Google:
+- Their site (hero / about / careers).
+- LinkedIn (founder + company).
+- **Job listings** — best signal for "what they don't have yet."
+- G2 / Capterra / Trustpilot reviews.
+- Founder's X/Twitter, podcast appearances.
+- Recent news (Google News + TechCrunch + Hacker News).
 
-**Then SUMMARIZE to the user and PAUSE for confirmation:**
+**Confidence rules** (same as research-html):
+- `high` = 2 independent sources OR primary source.
+- `medium` = 1 plausible source.
+- `low` = inferred. Show confidence dots in the page.
+
+**Write findings to memory before building the page:**
+
+```bash
+. "${HTML_SKILLS_LIB}/memory.sh"
+slug="$(memory::slugify "<company>")"
+memory::init_target "$slug" "<Company>"
+memory::add_fact "$slug" "<claim>" "<source>" "high"
+memory::add_person "$slug" "<Name>" "<Role>" "<linkedin>"
+memory::mark_researched "$slug" "0.9"
+```
+
+**Then SUMMARIZE and PAUSE for confirmation:**
 
 > *"Done digging. Here's the gist:*
 > *• Acme is a 40-person Series A doing AI customer support, founded by John (ex-Stripe Support Lead).*
-> *• They're hiring 3 SDRs right now — looks like outbound is mostly manual cold email.*
+> *• They're hiring 3 SDRs right now — outbound is mostly manual cold email.*
 > *• John posts weekly on LinkedIn about 'humanizing support' — values matter to him.*
-> *• Pain point: their G2 reviews mention slow response times during onboarding.*
+> *• Pain point: G2 reviews mention slow response times during onboarding.*
 >
 > *Sound right? Anything to add before I build the page?"*
 
-WAIT for the user's reply. They might correct you ("actually they just hired a head of growth, skip the SDR angle"). Bake corrections in before moving on.
+WAIT for the user's reply. Corrections go into `user_corrections[]` in the target file:
+
+```bash
+echo "{\"user_corrections\": [{\"date\": \"$(date -u +%FT%TZ)\", \"correction\": \"<text>\"}]}" \
+  | memory::merge_target "$slug"
+```
+
+Bake corrections into the page before moving on.
 
 ## Step 3: Build The Personalized HTML Page
 
@@ -111,6 +144,18 @@ Single self-contained `.html` file. Tokens copied from `shared/design-tokens.css
 9. **Next Step** — ONE button, ONE ask. Calendly link or DM reply.
    - Headline: *"15 minutes, John. Pick a slot."*
    - Button: bold, `accent-primary`, with subtle glow.
+
+10. **Sources Footer** — slim, dim, end of page. Pull from `shared/components/sources-footer.html`. Cites every URL you used + fetch date. Builds trust; founders click.
+
+### Insight workstream — synthesize BEFORE writing the page
+
+These are the artifacts that turn outreach from "informed" into "persuasive." Generate them once you have the research summary confirmed (after Step 2 pause). Most of these go directly into the page; the ones that don't go into your final hand-back message.
+
+- **Hooks (3–5, ranked)** — specific opener sentences. Most-promising first, ranked by likely punch. The TOP hook becomes the Hero headline. The next 1–2 become "We Get You" card themes.
+- **Trojan-Horse one-liner** — *"If I had to pitch them in 1 sentence: ___."* This becomes the page subhead AND the first line of the suggested DM. Forces synthesis.
+- **Why This Matters For You (per pain)** — every pain point gets framed through `profile.json`'s `pitch_angle`. These are the labels under each "We Get You" card.
+- **Probably Already Considered** — what they've likely tried. Use this to NEGATIVE-frame the Solution section: avoid pitching what they've obviously already evaluated.
+- **Risk Flags** — disqualifiers. **If any risk flag is severe** (e.g., they're exclusive-vendor-locked on a competing platform, or recent scandal), STOP and tell the user before generating the page. Don't waste effort on a page that shouldn't be sent.
 
 ### Workflow Comparison — Full Implementation Spec
 
@@ -240,9 +285,28 @@ Example:
 
 Then ask: *"Want any tweaks before you send it?"*
 
-## Step 6: Update Preferences & Profile
+## Step 6: Record the Run + Update Memory
 
-**`shared/profile.md`** — update IMMEDIATELY when you learn company-level info (company name, pitch angle, brand voice, signature phrases). These are global, used by every skill.
+After a successful deploy, immediately:
+
+```bash
+. "${HTML_SKILLS_LIB}/memory.sh"
+slug="$(memory::slugify "<company>")"
+
+# Record this outreach attempt against the target.
+memory::add_outreach "$slug" "$HTML_SKILLS_RUN_ID" "<live-url>" "<angle-used>" "pending"
+
+# Log the full run (insights generated, sections shipped, edits user made).
+memory::quick_run skill=outreach-html target_slug="$slug" \
+  angle="<angle-used>" otp=true workflow=true \
+  url="<live-url>" html_path="<absolute-path>"
+```
+
+**Why this matters:** tomorrow's run (or `mailmerge-html`'s 20-target batch) reads `past_outreach[]` to avoid repeating angles, and the run record is what `patterns.json` consolidation distills from. Without these two writes, the system can't learn.
+
+## Step 7: Update Preferences & Profile
+
+**`~/.cache/html-skills/memory/profile.json`** (and mirror to `shared/profile.md`) — update IMMEDIATELY when you learn company-level info (company name, pitch angle, brand voice, signature phrases). These are global, used by every skill.
 
 **`## User Preferences`** (this file, at bottom) — rewrite at END of successful run. Only for consistent patterns:
 - "Always OTP gated" → if user said yes 2+ runs in a row.
