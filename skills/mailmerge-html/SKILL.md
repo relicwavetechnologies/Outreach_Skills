@@ -26,7 +26,14 @@ The volume leverage move. Feed a CSV (or pasted list). Get N personalized pages 
    ```
    $HTML_SKILLS_LIB / ~/.claude/skills/html-skills/shared/lib / ~/.codex/.../shared/lib / ../../shared/lib
    ```
-   Source `log.sh`, `memory.sh`, `csv.sh`, and prepare to call `deploy.sh`.
+   Source `log.sh`, `memory.sh`, `csv.sh`, `outcomes.sh`, `track.sh`, and prepare to call `deploy.sh`.
+
+7. **One-tap pending-reply prompt.** ONCE per session, scan for outreaches > 24h old still marked `pending`:
+   ```bash
+   . "${HTML_SKILLS_LIB}/outcomes.sh"
+   outcomes::pending_replies 24
+   ```
+   For each: brief ask, then `outcomes::set_outreach_outcome <slug> <run_id> <outcome>` where outcome ∈ `pending|replied|no_reply|meeting_booked|cold`. This is the highest-signal feedback the system gets — two taps and the consolidation pass has gold-standard data for `patterns.json`. Skip if there are none pending.
 
 ## Step 1: Gather the Inputs
 
@@ -159,8 +166,9 @@ For each target NOT marked skipped:
 1. **Research** — call the slot-based research engine from `research-html`'s spec (inline; do not require research-html to be installed). Source diversification, confidence scoring, sources captured. Write facts to `targets/<slug>.json` via `memory::add_fact` etc.
 2. **Build insight sections** — Hooks, Trojan-Horse, Why-this-matters, Risk-flags. Top hook = page hero headline. Trojan-horse = subhead + first line of DM.
 3. **Generate the HTML page** — same structure as `outreach-html` (OTP gate, hero, we-get-you, problem, workflow comparison if enabled, solution, results, CTA, sources footer).
-4. **Deploy** — `bash "$DEPLOY_SH" ship "<file>" --project "<user-company>-mailmerge"`. Auth re-verify is handled by deploy.sh. Capture URL from last line of stdout.
-5. **Record** — `memory::add_outreach <slug> <run_id> <url> <angle> "pending"` and `memory::quick_run skill=mailmerge-html ...`.
+4. **Inject tracker (if enabled)** — `track::inject "<html-file>" "<per-target run_id>"`. No-op if `track::is_enabled` is false. Each target gets its own run_id so events route correctly.
+5. **Deploy** — `bash "$DEPLOY_SH" ship "<file>" --project "<user-company>-mailmerge"`. Auth re-verify is handled by deploy.sh. Capture URL from last line of stdout.
+6. **Record** — `memory::add_outreach <slug> <run_id> <url> <angle> "pending"` and `memory::quick_run skill=mailmerge-html ...`.
 
 ### Parallelism
 

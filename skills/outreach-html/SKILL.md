@@ -23,6 +23,19 @@ End-to-end personalized outreach pipeline. Research the target → build a one-o
    - If `research_freshness_score > 0.7` and `last_researched` within 14 days, **skip Step 2's research entirely** and go straight to Step 3 with stored facts.
    - If older, do a quick refresh (Step 2 lite) and run diff mode.
 
+8. **One-tap pending-reply prompt.** ONCE per session (not every skill invocation), check for outreaches that need a status update:
+   ```bash
+   . "${HTML_SKILLS_LIB}/outcomes.sh"
+   outcomes::pending_replies 24
+   ```
+   This emits one JSON line per outreach > 24h old still marked `pending`. For each, ask the user briefly:
+   > *"Quick one before we start — John @ Acme (DMed 2d ago, SDR-hiring angle): reply / no reply / not yet?"*
+   Accept short answers (`y`/`n`/`nyt` or any of: `replied | no_reply | pending | meeting_booked | cold`). Update each:
+   ```bash
+   outcomes::set_outreach_outcome <slug> <run_id> <outcome>
+   ```
+   This is the highest-signal feedback the system gets. Two taps. Then proceed.
+
 ## Step 1: Gather What You Need
 
 **Always ask (every run):**
@@ -263,6 +276,17 @@ bash "$DEPLOY_SH" ship "<html-file>"
 The URL appears on the LAST line of stdout. Capture it for the hand-back message.
 
 **Failure → read `~/.cache/html-skills/last-error.md`, translate to one line, decide retry vs fallback.** Exit codes: 10 = env missing, 11 = auth timeout, 12 = deploy failed, 124 = command timeout. Fall back to local-save in `~/Downloads/` if retry doesn't help.
+
+**Inject the tracker (if enabled) BEFORE deploy.** Tiny step, big payoff — it's what gives the system its automatic open/scroll/click signal:
+
+```bash
+. "${HTML_SKILLS_LIB}/track.sh"
+if track::is_enabled; then
+  track::inject "<html-file>" "$HTML_SKILLS_RUN_ID"
+fi
+```
+
+If tracking isn't set up, this is a no-op (track::is_enabled returns false). When set up, track.js fires `page_view`, `scroll_25/50/75/100`, `dwell_30s/60s/180s`, and `cta_click` events to the user's own Vercel KV endpoint. No cookies, no fingerprinting, no third-party — fully owned by the user. Setup is one-time via `bash "$HTML_SKILLS_LIB/track.sh" setup --project NAME`.
 
 ## Step 5: Hand Back The Deliverable
 
