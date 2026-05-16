@@ -107,12 +107,17 @@ skills-html/
 ├── README.md
 ├── install.sh
 ├── shared/
-│   ├── profile.md            # your profile — read by every skill
-│   ├── design-tokens.css     # one design language across all outputs
-│   └── lib/                  # executable helpers (NOT prose for the LLM)
-│       ├── log.sh            # status/error helpers, last-error.md writer
-│       ├── memory.sh         # ~/.cache/html-skills/ init + JSON state I/O
-│       └── deploy.sh         # Vercel deploy state machine (production-grade)
+│   ├── profile.md              # your profile — read by every skill
+│   ├── design-tokens.css       # one design language across all outputs
+│   ├── SCHEMAS.md              # memory + run JSON schema contracts
+│   ├── lib/                    # executable helpers (NOT prose for the LLM)
+│   │   ├── log.sh              # status/error helpers, last-error.md writer
+│   │   ├── memory.sh           # ~/.cache/html-skills/ init + JSON I/O + target/run helpers
+│   │   └── deploy.sh           # Vercel deploy state machine (production-grade)
+│   └── components/             # reusable HTML snippets skills paste into output
+│       ├── confidence-dot.html # inline confidence indicators (high/medium/low)
+│       ├── sources-footer.html # citations block at end of every report
+│       └── insight-block.html  # the visual grammar for insight sections
 ├── skills/
 │   ├── research-html/SKILL.md
 │   ├── present-html/SKILL.md
@@ -122,8 +127,9 @@ skills-html/
 │   ├── review-html/SKILL.md
 │   └── editor-html/SKILL.md
 └── tests/
-    ├── test-deploy-dryrun.sh # offline state-machine tests (no network)
-    └── smoke-deploy.sh       # real Vercel deploy + teardown
+    ├── test-deploy-dryrun.sh   # offline state-machine tests (no network)
+    ├── test-memory.sh          # memory.sh target/run/dedupe tests
+    └── smoke-deploy.sh         # real Vercel deploy + teardown
 ```
 
 ## Per-user runtime cache
@@ -162,11 +168,33 @@ This means:
   `~/.cache/html-skills/last-error.md` with command, exit code, captured stderr,
   and a suggested next step. Paste it into a bug report and you're done.
 
+## Cross-skill memory (the engine that makes the system learn)
+
+Every skill reads from and writes to `~/.cache/html-skills/memory/`:
+
+- **`targets/<slug>.json`** — everything any skill ever learned about a company, founder, or prospect. `research-html` writes facts here; `outreach-html` reads them and refuses to re-use angles that already shipped.
+- **`runs/<run_id>.json`** — one record per skill execution. Inputs, draft sections, shipped sections, edits, outcomes. The substrate for `patterns.json` consolidation later.
+- **`profile.json` / `voice.json` / `patterns.json`** — user/company profile, learned writing style, distilled rules. Read on every skill startup.
+- **`outcomes/feedback.jsonl`** — append-only event log (P2 surface).
+
+Full schemas in [`shared/SCHEMAS.md`](shared/SCHEMAS.md). Skills MUST go through `memory::*` helpers in `shared/lib/memory.sh` — `memory::add_fact`, `memory::add_person`, `memory::add_outreach`, `memory::merge_target`, `memory::quick_run`, etc. — so writes stay atomic, deduped, and schema-conformant.
+
+## Confidence-tagged research + insight sections
+
+`research-html` and `outreach-html` now produce more than summaries:
+
+- **Slot-based research plan** built BEFORE any web search. Each fact gets a `high | medium | low` confidence tag; the page renders a dot next to non-obvious claims so the reader can calibrate.
+- **Sources footer** — every URL fetched, with fetch date. Founders click; trust compounds.
+- **Insight sections** — *Why This Matters For You*, *Hooks (ranked)*, *Probably Already Considered*, *Risk Flags*, *Trojan-Horse One-Liner*. These are what turn the artifact from "informed" to "persuasive."
+
+The visual grammar for these lives in `shared/components/insight-block.html`. Skills paste the CSS once, then build one `<section data-kind="…">` per insight.
+
 ## Testing
 
 ```bash
-# Offline state-machine tests (no network, no vercel CLI required)
-bash tests/test-deploy-dryrun.sh
+# Offline tests — no network, no vercel CLI required
+bash tests/test-deploy-dryrun.sh   # 37 assertions on the deploy state machine
+bash tests/test-memory.sh          # 46 assertions on memory helpers
 
 # Real Vercel smoke test (creates + verifies + tears down a real deploy)
 export VERCEL_SMOKE_PROJECT=html-skills-smoke

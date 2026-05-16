@@ -18,8 +18,9 @@ BASE_URL="https://raw.githubusercontent.com/${GITHUB_USERNAME}/${GITHUB_REPO}/${
 
 ALL_SKILLS=(research-html present-html deploy-html outreach-html plan-html review-html editor-html)
 OUTREACH_BUNDLE=(research-html present-html deploy-html outreach-html)
-SHARED_FILES=(profile.md design-tokens.css)
+SHARED_FILES=(profile.md design-tokens.css SCHEMAS.md)
 SHARED_LIB_FILES=(log.sh memory.sh deploy.sh)
+SHARED_COMPONENT_FILES=(confidence-dot.html sources-footer.html insight-block.html)
 
 # ── Colors (tput when available, fallback to ANSI) ───────────────────────
 # Guard tput failures so a missing $TERM doesn't kill the script under `set -e`.
@@ -142,7 +143,8 @@ for target in "${targets[@]}"; do
   install_root="${target}/skills/html-skills"
   shared_root="${install_root}/shared"
   lib_root="${shared_root}/lib"
-  mkdir -p "$shared_root" "$lib_root"
+  components_root="${shared_root}/components"
+  mkdir -p "$shared_root" "$lib_root" "$components_root"
 
   title "Installing to ${install_root}"
 
@@ -163,6 +165,17 @@ for target in "${targets[@]}"; do
     if download "${BASE_URL}/shared/lib/${f}" "${lib_root}/${f}"; then
       chmod +x "${lib_root}/${f}"
       ok "shared/lib/${f}"
+    else
+      network_error_msg
+      exit 1
+    fi
+  done
+
+  # Reusable HTML component snippets (confidence dots, sources footer, insight blocks)
+  for f in "${SHARED_COMPONENT_FILES[@]}"; do
+    info "Downloading shared/components/${f}"
+    if download "${BASE_URL}/shared/components/${f}" "${components_root}/${f}"; then
+      ok "shared/components/${f}"
     else
       network_error_msg
       exit 1
