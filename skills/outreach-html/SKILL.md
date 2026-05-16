@@ -173,32 +173,51 @@ Two vertical SVG node graphs side-by-side, racing.
 - Mobile-first. Workflow stacks vertically under 720px, animations preserved.
 - Page loads <1s on 4G. No external JS libs beyond what's inline.
 
-## Step 4: Deploy (INLINE — no dependency on deploy-html)
+## Step 4: Deploy (via shared/lib/deploy.sh — single source of truth)
 
-Use the saved Vercel config from `## Saved Config` below. If not set up:
+**Critical:** operational deploy logic lives in `shared/lib/deploy.sh`. Do NOT shell out `vercel` commands here yourself; call the script. The script handles Node/CLI install, browser-open login with `vercel whoami` polling (every 5s for up to 90s — fixes the "auth landed but skill stopped" bug), `vercel link` for project stickiness, robust URL capture, custom-domain aliasing, webhook pings, and writes `~/.cache/html-skills/last-error.md` on failure.
 
-**First run — quick setup walkthrough:**
+**Locate the script:**
 
-1. Check Node: `node --version`. If missing/old → ask permission, `brew install node` (macOS) or appropriate.
-2. Check Vercel CLI: `vercel --version`. If missing → `npm install -g vercel`.
-3. Check auth: `vercel whoami`. If not authed → `vercel login` (opens browser).
-4. Ask once: project name (default: `{user-company}-outreach`), custom domain (optional), Slack/Discord webhook (optional).
-5. Save everything to `## Saved Config` IMMEDIATELY.
+```
+$HTML_SKILLS_LIB/deploy.sh
+  → ~/.claude/skills/html-skills/shared/lib/deploy.sh
+  → ~/.codex/skills/html-skills/shared/lib/deploy.sh
+  → ../../shared/lib/deploy.sh   (when running from a repo clone)
+```
 
-**Every later run — silent deploy:**
+Store as `DEPLOY_SH`.
 
-1. Create temp dir `~/.cache/html-skills/outreach-{timestamp}/`.
-2. Copy HTML in as `index.html`.
-3. Minimal `vercel.json`: `{ "cleanUrls": true, "trailingSlash": false }`.
-4. `vercel --prod --yes --name {project-name}`.
-5. Capture URL. Alias to custom domain if set.
-6. Cleanup. Ping webhook if set.
-7. Save to Saved Config → Last deploy.
+**Check state first:**
 
-**Errors → plain language:**
-- Auth expired → *"Re-login real quick"*, run `vercel login`, retry.
-- Build error → silent retry once, then fallback to local save.
-- Network → *"Saved locally to ~/Downloads/{file}. Drag it into vercel.com/new when you're back online."*
+```bash
+bash "$DEPLOY_SH" status
+```
+
+If `phase:` is `fresh` or `awaiting-auth` → run setup. Otherwise skip to ship.
+
+**First-run setup (asks user nothing during execution):**
+
+Default the project name to `{user-company}-outreach` from `shared/profile.md`. Ask user once for custom domain + webhook (or pull from Saved Config). Then:
+
+```bash
+bash "$DEPLOY_SH" setup \
+  --project "<user-company>-outreach" \
+  ${custom_domain:+--domain "$custom_domain"} \
+  ${webhook:+--webhook "$webhook"}
+```
+
+**Critical for the bug fix:** once `setup` returns 0, IMMEDIATELY proceed to `ship`. Do NOT pause for "ready to deploy?" — the user's already approved the page in Step 3.
+
+**Ship the page (every run):**
+
+```bash
+bash "$DEPLOY_SH" ship "<html-file>"
+```
+
+The URL appears on the LAST line of stdout. Capture it for the hand-back message.
+
+**Failure → read `~/.cache/html-skills/last-error.md`, translate to one line, decide retry vs fallback.** Exit codes: 10 = env missing, 11 = auth timeout, 12 = deploy failed, 124 = command timeout. Fall back to local-save in `~/Downloads/` if retry doesn't help.
 
 ## Step 5: Hand Back The Deliverable
 
