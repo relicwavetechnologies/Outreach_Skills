@@ -1,0 +1,90 @@
+<!--
+  sources-footer.html — citations footer for research / outreach pages.
+  Slim, dim, end of page. Founders click. Builds trust.
+
+  Skills paste the CSS once into <style>, then build the <section> with
+  one row per URL fetched. `data-used-for` is shown in column 2.
+
+  Skip rendering this section if there are zero sources to cite.
+-->
+
+<!-- ── CSS (paste once into <style>) ──────────────────────────────────── -->
+<style>
+.sources-footer {
+  margin-top: clamp(3rem, 8vw, 6rem);
+  padding: 2rem 0 3rem;
+  border-top: 1px solid var(--border-soft, rgba(255,255,255,0.06));
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+.sources-footer__title {
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-bottom: 1.25rem;
+}
+.sources-footer__list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.4rem 1.5rem;
+}
+@media (min-width: 720px) {
+  .sources-footer__list {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) max-content;
+    column-gap: 1.5rem;
+  }
+}
+.sources-footer__row {
+  display: contents;
+}
+.sources-footer__url {
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--border-soft, rgba(255,255,255,0.12));
+  overflow-wrap: anywhere;
+  transition: color .15s ease;
+}
+.sources-footer__url:hover { color: var(--accent-secondary); }
+.sources-footer__use {
+  color: var(--text-muted);
+  font-style: italic;
+}
+.sources-footer__date {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.sources-footer__note {
+  margin-top: 1.25rem;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+@media print {
+  .sources-footer { color: #555; border-top-color: #ccc; }
+  .sources-footer__url { color: #333; }
+}
+</style>
+
+<!-- ── Markup template ────────────────────────────────────────────────── -->
+<section class="sources-footer" aria-label="Sources">
+  <h2 class="sources-footer__title">Sources</h2>
+
+  <div class="sources-footer__list">
+    <!-- Repeat one row per source. Skills must fill these in from real fetches. -->
+    <div class="sources-footer__row">
+      <a class="sources-footer__url" href="EXAMPLE_URL" target="_blank" rel="noopener">EXAMPLE_URL</a>
+      <span class="sources-footer__use">company basics, funding</span>
+      <time class="sources-footer__date" datetime="YYYY-MM-DD">YYYY-MM-DD</time>
+    </div>
+    <!-- /repeat -->
+  </div>
+
+  <p class="sources-footer__note">
+    Confidence indicators throughout this page: <span class="cdot cdot-high"></span> verified, <span class="cdot cdot-medium"></span> single source, <span class="cdot cdot-low"></span> inferred.
+  </p>
+</section>

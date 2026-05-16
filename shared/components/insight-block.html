@@ -1,0 +1,182 @@
+<!--
+  insight-block.html — the visual grammar for the insight sections that
+  turn research from "summary" into "persuasive."
+  Used by: research-html, outreach-html.
+
+  Variants (apply as data-kind on the section):
+    data-kind="why"          — "Why This Matters For You" — accent-primary
+    data-kind="hooks"        — "Hooks" — accent-secondary
+    data-kind="considered"   — "Probably Already Considered" — text-muted
+    data-kind="risk"         — "Risk Flags" — accent-danger
+    data-kind="trojan"       — "Trojan-Horse One-Liner" — accent-success, hero-sized
+
+  Skills should paste the CSS once, then build sections per kind.
+-->
+
+<!-- ── CSS (paste once into <style>) ──────────────────────────────────── -->
+<style>
+.insight {
+  margin: clamp(2.5rem, 6vw, 4.5rem) 0;
+  padding: clamp(1.5rem, 3vw, 2.25rem);
+  background: var(--bg-card);
+  border: 1px solid var(--border-soft, rgba(255,255,255,0.06));
+  border-radius: 16px;
+  position: relative;
+  overflow: hidden;
+}
+.insight::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0;
+  width: 3px; height: 100%;
+  background: var(--insight-color, var(--accent-primary));
+  opacity: 0.85;
+}
+.insight[data-kind="why"]        { --insight-color: var(--accent-primary);   }
+.insight[data-kind="hooks"]      { --insight-color: var(--accent-secondary); }
+.insight[data-kind="considered"] { --insight-color: var(--text-muted);       }
+.insight[data-kind="risk"]       { --insight-color: var(--accent-danger);    }
+.insight[data-kind="trojan"]     { --insight-color: var(--accent-success);   }
+
+.insight__kicker {
+  font-family: var(--font-display);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--insight-color);
+  margin-bottom: 0.75rem;
+}
+.insight__title {
+  font-family: var(--font-display);
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  line-height: var(--lh-tight);
+  margin-bottom: 1.25rem;
+}
+.insight[data-kind="trojan"] .insight__title {
+  font-size: clamp(var(--fs-2xl), 4vw, var(--fs-4xl));
+  letter-spacing: -0.01em;
+}
+.insight__body {
+  font-family: var(--font-body);
+  color: var(--text-secondary);
+  font-size: var(--fs-base);
+  line-height: var(--lh-relaxed);
+}
+.insight__body p + p { margin-top: 0.85rem; }
+.insight__list {
+  list-style: none;
+  padding: 0; margin: 0;
+  display: grid;
+  gap: 0.85rem;
+}
+.insight__item {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.85rem;
+  align-items: baseline;
+}
+.insight__rank {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--insight-color);
+  background: color-mix(in oklab, var(--insight-color) 14%, transparent);
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  min-width: 1.5rem;
+  text-align: center;
+}
+.insight__hook {
+  color: var(--text-primary);
+  font-weight: var(--fw-medium);
+}
+.insight__why {
+  display: block;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  margin-top: 0.2rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .insight { transition: none; }
+}
+@media print {
+  .insight { background: #fff; color: #111; border-color: #ccc; }
+  .insight__title { color: #111; }
+  .insight__body  { color: #333; }
+}
+</style>
+
+<!-- ── Markup templates ───────────────────────────────────────────────── -->
+
+<!-- 1. Why This Matters For You — single-paragraph insight -->
+<section class="insight" data-kind="why">
+  <div class="insight__kicker">Why this matters for you</div>
+  <h2 class="insight__title">Their slow-onboarding G2 complaints are the exact latency problem you remove in week 1.</h2>
+  <div class="insight__body">
+    <p>EXAMPLE: Their support team replies in 6–8 hours during onboarding (G2 reviews, last 60 days). Your pitch angle — "AI replaces wait time, not warmth" — lands directly on this. Lead the page with onboarding-latency, not generic "AI support."</p>
+  </div>
+</section>
+
+<!-- 2. Hooks — ranked list, top hook becomes the page hero headline -->
+<section class="insight" data-kind="hooks">
+  <div class="insight__kicker">Hooks (ranked)</div>
+  <h2 class="insight__title">Three openers, ranked by likely punch.</h2>
+  <ol class="insight__list">
+    <li class="insight__item">
+      <span class="insight__rank">01</span>
+      <div>
+        <span class="insight__hook">"Saw you're hiring 3 SDRs to do what could take 1."</span>
+        <span class="insight__why">Hits their freshest pain — the open job listings — and ties to your scale-vs-headcount wedge.</span>
+      </div>
+    </li>
+    <li class="insight__item">
+      <span class="insight__rank">02</span>
+      <div>
+        <span class="insight__hook">"You posted last week about humanizing support — built a quick page on what that looks like at scale."</span>
+        <span class="insight__why">Their own words back to them. Lower-risk opener; works if hook 01 doesn't land.</span>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<!-- 3. Probably Already Considered — short rebuttal list -->
+<section class="insight" data-kind="considered">
+  <div class="insight__kicker">Probably already considered</div>
+  <h2 class="insight__title">What they've likely tried — and what's different here.</h2>
+  <ul class="insight__list">
+    <li class="insight__item">
+      <span class="insight__rank">↳</span>
+      <div>
+        <span class="insight__hook">Intercom Fin / Zendesk AI.</span>
+        <span class="insight__why">Bolted onto their existing helpdesk. Yours is outbound-native, not a reactive bot.</span>
+      </div>
+    </li>
+  </ul>
+</section>
+
+<!-- 4. Risk Flags — disqualifiers, surfaced loud -->
+<section class="insight" data-kind="risk">
+  <div class="insight__kicker">Risk flags</div>
+  <h2 class="insight__title">Things to confirm before sending.</h2>
+  <ul class="insight__list">
+    <li class="insight__item">
+      <span class="insight__rank">!</span>
+      <div>
+        <span class="insight__hook">They use Salesforce exclusively.</span>
+        <span class="insight__why">Your integration is HubSpot-first. Confirm Salesforce support before pitching.</span>
+      </div>
+    </li>
+  </ul>
+</section>
+
+<!-- 5. Trojan-Horse One-Liner — synthesis -->
+<section class="insight" data-kind="trojan">
+  <div class="insight__kicker">If I had to pitch them in one sentence</div>
+  <h2 class="insight__title">"You're about to spend $400k/year hiring SDRs to do what your founders already showed you can be done with code."</h2>
+  <div class="insight__body">
+    <p>Use this as the page subhead, AND the first line of the DM. It's the synthesis — everything else supports it.</p>
+  </div>
+</section>

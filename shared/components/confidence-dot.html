@@ -1,0 +1,64 @@
+<!--
+  confidence-dot.html — tiny inline indicator for claim confidence.
+  Skills paste the CSS once into the page's <style> block, then use the
+  <span> markup inline wherever a claim is made.
+
+  Usage:
+    Series A, 40 employees<span class="cdot cdot-high" title="high confidence — 2 sources"></span>
+
+  Levels:
+    cdot-high     — verified across 2+ sources or a primary source
+    cdot-medium   — single plausible source
+    cdot-low      — inferred / single noisy source. ALWAYS visible — never hide.
+-->
+
+<!-- ── CSS (paste once into <style>) ──────────────────────────────────── -->
+<style>
+.cdot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  margin-left: 0.35rem;
+  vertical-align: 0.1em;
+  position: relative;
+  cursor: help;
+  transition: transform .15s ease;
+}
+.cdot:hover { transform: scale(1.4); }
+.cdot-high   { background: var(--accent-success); box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent-success) 25%, transparent); }
+.cdot-medium { background: var(--accent-warning); box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent-warning) 25%, transparent); }
+.cdot-low    { background: var(--text-muted);     box-shadow: 0 0 0 2px color-mix(in oklab, var(--text-muted) 25%, transparent); }
+
+/* Tiny floating label on hover, no JS needed. */
+.cdot[title]::after {
+  content: attr(title);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: var(--fs-xs);
+  font-family: var(--font-body);
+  white-space: nowrap;
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-soft, rgba(255,255,255,0.06));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .15s ease;
+}
+.cdot:hover[title]::after { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cdot, .cdot:hover { transition: none; transform: none; }
+  .cdot[title]::after { transition: none; }
+}
+</style>
+
+<!-- ── Inline usage examples (delete before shipping) ─────────────────── -->
+<!--
+  Founded 2021<span class="cdot cdot-high" title="high — primary source: their site"></span>.
+  Estimated ~12 paying customers<span class="cdot cdot-low" title="low — inferred from job titles"></span>.
+-->
