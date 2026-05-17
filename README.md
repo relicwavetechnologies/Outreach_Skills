@@ -1,5 +1,7 @@
 # html-skills
 
+[![CI](https://github.com/relicwavetechnologies/Outreach_Skills/actions/workflows/ci.yml/badge.svg)](https://github.com/relicwavetechnologies/Outreach_Skills/actions/workflows/ci.yml)
+
 **Skills that turn Claude Code & Codex into a rich-HTML generator.**
 
 Instead of getting markdown back, you get a styled, animated, interactive HTML page — a research report, a pitch deck, a planning doc, a code review, a triage tool — saved as a single `.html` file you can open in your browser or deploy to a live URL.
@@ -250,13 +252,20 @@ bash ~/.claude/skills/html-skills/shared/lib/track.sh sync
 
 ## Testing
 
+Every test runs offline by default. The CI workflow (`.github/workflows/ci.yml`) gates pushes and PRs on the full suite.
+
 ```bash
 # Offline tests — no network, no vercel CLI required
-bash tests/test-deploy-dryrun.sh   # 37 assertions on the deploy state machine
-bash tests/test-memory.sh          # 46 assertions on memory helpers
-bash tests/test-csv.sh             # 28 assertions on the CSV parser (quirks + edge cases)
-bash tests/test-outcomes.sh        # 22 assertions on outcomes + one-tap reply prompt
-bash tests/test-track.sh           # 23 assertions on tracker inject/state/scaffold
+bash tests/test-deploy-dryrun.sh   # 37  — deploy state machine
+bash tests/test-memory.sh          # 46  — memory helpers
+bash tests/test-csv.sh             # 28  — CSV parser (RFC 4180 quirks)
+bash tests/test-outcomes.sh        # 24  — outcomes + one-tap reply prompt
+bash tests/test-track.sh           # 23  — tracker inject/state/scaffold
+bash tests/test-integration.sh     # 38  — END-TO-END pipeline (every lib together)
+
+# Static analysis
+bash tests/lint-skills.sh          # SKILL.md frontmatter + bash blocks + helper/component refs
+bash tests/lint-js.sh              # track.js + track-server.js parse via node --check
 
 # Real Vercel smoke test (creates + verifies + tears down a real deploy)
 export VERCEL_SMOKE_PROJECT=html-skills-smoke
@@ -264,7 +273,7 @@ vercel login    # one-time
 bash tests/smoke-deploy.sh
 ```
 
-**Total: 156 offline assertions.**
+**Total: 196 offline assertions** (unit + integration), gated by CI on every push.
 
 ---
 
