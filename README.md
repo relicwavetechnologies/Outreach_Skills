@@ -23,17 +23,25 @@ These skills make the AI:
 
 ## Install
 
-One command:
+**Default (just installs the skills + libs; reports any missing deps):**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/relicwavetechnologies/Outreach_Skills/main/install.sh | bash
+```
+
+**Auto-install missing deps too (`jq`, `python3` via your platform's package manager, with one y/N prompt each):**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/relicwavetechnologies/Outreach_Skills/main/install.sh | bash -s -- --auto-deps
 ```
 
 The installer will:
 
 1. Detect if you have Claude Code, Codex, or both.
 2. Ask which skills you want (all / outreach bundle / pick).
-3. Drop the SKILL.md files in the right place.
+3. Download the SKILL.md files + shared libs + components.
+4. Initialize the local cache at `~/.cache/html-skills/`.
+5. Check for `jq`, `python3`, `node`, `vercel` and report status. With `--auto-deps`, offer to install missing ones via `brew` (macOS), `apt`/`dnf`/`pacman`/`zypper`/`apk` (Linux). `node` + `vercel` are deliberately handled lazily by `deploy-html` on first ship.
 
 That's it. Restart your AI, and the skills are live.
 

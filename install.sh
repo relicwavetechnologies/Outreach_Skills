@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────────────────────
 #  html-skills installer
-#  curl -fsSL https://raw.githubusercontent.com/relicwavetechnologies/Outreach_Skills/main/install.sh | bash
+#
+#  Default:
+#    curl -fsSL https://raw.githubusercontent.com/relicwavetechnologies/Outreach_Skills/main/install.sh | bash
+#
+#  With auto-install of optional deps (jq, python3, node):
+#    curl -fsSL https://raw.githubusercontent.com/relicwavetechnologies/Outreach_Skills/main/install.sh | bash -s -- --auto-deps
 #
 #  Drops SKILL.md files into ~/.claude/skills/html-skills/ and/or
 #  ~/.codex/skills/html-skills/ so Claude Code and Codex can use them.
@@ -9,6 +14,19 @@
 # ──────────────────────────────────────────────────────────────────────────
 
 set -e
+
+# ── Args ─────────────────────────────────────────────────────────────────
+AUTO_DEPS=0
+for arg in "$@"; do
+  case "$arg" in
+    --auto-deps)  AUTO_DEPS=1 ;;
+    -h|--help)
+      sed -n '2,16p' "$0"
+      exit 0
+      ;;
+    *) ;;  # unknown flags pass through; future-proofing
+  esac
+done
 
 # ── Config ───────────────────────────────────────────────────────────────
 GITHUB_USERNAME="relicwavetechnologies"
@@ -214,41 +232,128 @@ else
   dim "First skill run will create it automatically."
 fi
 
-# ── 3c. Optional dependency check (non-blocking) ─────────────────────────
-title "Checking optional dependencies"
+# ── 3c. Optional dependency check ────────────────────────────────────────
+#
+#  Default mode (no --auto-deps): just REPORTS which deps are missing and
+#  prints the platform-correct install command. Conservative — never
+#  installs system packages without explicit consent.
+#
+#  --auto-deps mode: for each missing dep, asks once "Install via <PM>? [y/N]".
+#  Per-dep confirmation keeps the user in control even within the "auto"
+#  mode. Decline → falls back to the same report-and-suggest as default.
+#
+#  Vercel + Node are deliberately handled lazily by deploy.sh on first
+#  ship; we don't push them at install time. install.sh only proactively
+#  installs jq (used by every memory operation) and python3 (used by
+#  csv/voice/patterns) if --auto-deps is set.
 
-if command -v jq >/dev/null 2>&1; then
-  ok "jq found ($(jq --version 2>/dev/null))"
-else
-  warn "jq not installed — needed for state updates."
+# Pick the platform package manager.
+detect_pm() {
   case "$(uname -s)" in
-    Darwin) dim "Install: brew install jq" ;;
-    Linux)  dim "Install: apt install jq  (or your distro's equivalent)" ;;
-    *)      dim "Install jq from https://stedolan.github.io/jq/" ;;
+    Darwin)
+      if command -v brew >/dev/null 2>&1; then echo "brew"; return; fi
+      echo "macos-no-brew"; return ;;
+    Linux)
+      if   command -v apt-get >/dev/null 2>&1; then echo "apt"
+      elif command -v dnf     >/dev/null 2>&1; then echo "dnf"
+      elif command -v pacman  >/dev/null 2>&1; then echo "pacman"
+      elif command -v zypper  >/dev/null 2>&1; then echo "zypper"
+      elif command -v apk     >/dev/null 2>&1; then echo "apk"
+      else echo "linux-unknown"; fi
+      return ;;
+    *) echo "unknown"; return ;;
   esac
+}
+
+# Print the platform-specific install command for a dep.
+install_hint() {
+  local pkg="$1" pm="$2"
+  case "$pm" in
+    brew)         echo "brew install $pkg" ;;
+    apt)          echo "sudo apt-get update && sudo apt-get install -y $pkg" ;;
+    dnf)          echo "sudo dnf install -y $pkg" ;;
+    pacman)       echo "sudo pacman -S --noconfirm $pkg" ;;
+    zypper)       echo "sudo zypper install -y $pkg" ;;
+    apk)          echo "sudo apk add $pkg" ;;
+    macos-no-brew) echo "install Homebrew from https://brew.sh, then: brew install $pkg" ;;
+    *)            echo "install $pkg via your platform's package manager" ;;
+  esac
+}
+
+# Try to install a package. Returns 0 on success.
+auto_install() {
+  local pkg="$1" pm="$2"
+  case "$pm" in
+    brew)    brew install "$pkg" ;;
+    apt)     sudo apt-get update -qq && sudo apt-get install -y "$pkg" ;;
+    dnf)     sudo dnf install -y "$pkg" ;;
+    pacman)  sudo pacman -S --noconfirm "$pkg" ;;
+    zypper)  sudo zypper install -y "$pkg" ;;
+    apk)     sudo apk add "$pkg" ;;
+    *)       return 1 ;;
+  esac
+}
+
+# Handle a single dep: detect, report, optionally offer auto-install.
+handle_dep() {
+  local cmd="$1" pkg="$2" why="$3" required="${4:-soft}"
+  if command -v "$cmd" >/dev/null 2>&1; then
+    case "$cmd" in
+      jq)      ok "jq found ($(jq --version 2>/dev/null))" ;;
+      python3) ok "python3 found ($(python3 --version 2>&1))" ;;
+      node)    ok "Node found ($(node --version 2>/dev/null))" ;;
+      *)       ok "$cmd found" ;;
+    esac
+    return 0
+  fi
+
+  # Missing — always report why.
+  if [ "$required" = "hard" ]; then
+    warn "$cmd not installed — $why"
+  else
+    dim "$cmd not installed — $why"
+  fi
+  local pm; pm="$(detect_pm)"
+  local hint; hint="$(install_hint "$pkg" "$pm")"
+
+  if [ "$AUTO_DEPS" = "1" ] && [[ "$pm" =~ ^(brew|apt|dnf|pacman|zypper|apk)$ ]]; then
+    printf "    ${BOLD}Install %s via %s?${RESET} [y/${BOLD}N${RESET}]: " "$pkg" "$pm"
+    local reply=""
+    if [ -t 0 ]; then
+      read -r reply </dev/tty 2>/dev/null || reply=""
+    else
+      read -r reply </dev/tty 2>/dev/null || reply=""
+    fi
+    if [[ "$reply" =~ ^[Yy]$ ]]; then
+      if auto_install "$pkg" "$pm"; then
+        ok "$pkg installed"
+        return 0
+      else
+        warn "auto-install of $pkg failed — run manually:"
+        dim "  $hint"
+        return 1
+      fi
+    fi
+  fi
+
+  dim "  install with: $hint"
+}
+
+title "Checking optional dependencies"
+if [ "$AUTO_DEPS" = "1" ]; then
+  dim "(running with --auto-deps — will offer to install missing deps via $(detect_pm))"
 fi
 
-if command -v node >/dev/null 2>&1; then
-  ok "Node found ($(node --version 2>/dev/null))"
-else
-  dim "Node not found — deploy-html will install it the first time you ship a page."
-fi
+# Required-ish: jq (every memory op) + python3 (csv/voice/patterns).
+handle_dep jq      jq      "needed for state updates" hard
+handle_dep python3 python3 "needed by mailmerge/voice/patterns for parsing + analysis" hard
 
+# Lazily handled by deploy.sh on first ship; just report status.
+handle_dep node    node    "deploy-html installs it on first ship if missing" soft
 if command -v vercel >/dev/null 2>&1; then
   ok "Vercel CLI found"
 else
-  dim "Vercel CLI not found — deploy-html will install it the first time you ship a page."
-fi
-
-if command -v python3 >/dev/null 2>&1; then
-  ok "python3 found ($(python3 --version 2>&1))"
-else
-  warn "python3 not installed — mailmerge-html needs it for CSV parsing."
-  case "$(uname -s)" in
-    Darwin) dim "Install: xcode-select --install  (or: brew install python)" ;;
-    Linux)  dim "Install via your package manager (apt install python3, etc.)" ;;
-    *)      dim "Install python3 from https://python.org" ;;
-  esac
+  dim "Vercel CLI not found — deploy-html will install it on first ship."
 fi
 
 # ── 4. Done — show usage ─────────────────────────────────────────────────
