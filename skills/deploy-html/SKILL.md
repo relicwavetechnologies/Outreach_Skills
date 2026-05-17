@@ -130,6 +130,19 @@ If `deploy.sh` exits non-zero, it has already written `~/.cache/html-skills/last
 - `Saved Config` mirrors the state file (`~/.cache/html-skills/state/deploy.json`) — the script is the source of truth, but you can update this section so it stays human-readable.
 - `User Preferences` only changes for consistent patterns (e.g. user always skips Slack webhook → drop that question).
 
+## Step 7: Record the run
+
+ONLY when this skill is invoked directly by the user (not when called as a sub-step of `outreach-html`/`mailmerge-html`, which log their own runs), log the deploy so `dashboard-html`'s KPI cards count standalone deploys:
+
+```bash
+. "${HTML_SKILLS_LIB}/memory.sh"
+memory::quick_run skill=deploy-html \
+  source_file="$source_file" url="$deployed_url" \
+  custom_domain="$custom_domain"
+```
+
+Skip this step if you're being invoked as part of another skill's pipeline — the parent skill is responsible for the run record.
+
 ## Common Mistakes to Avoid
 
 1. **Re-implementing deploy logic in prose.** The script is the source of truth. Call it.
