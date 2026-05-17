@@ -131,6 +131,19 @@ Rewrite preferences ONLY when:
 - Export format is consistent.
 - User adds the same field/column repeatedly across runs.
 
+## Step 6: Record the run
+
+Log a run record so dashboard-html can show editor activity in the KPI cards:
+
+```bash
+. "${HTML_SKILLS_LIB}/memory.sh"
+memory::quick_run skill=editor-html \
+  pattern="$pattern" item_count="$item_count" \
+  export_format="$export_format" html_path="$html_path"
+```
+
+`$pattern` is one of `kanban | sortable | table | filter-tag | config-form | prompt-tuner` per Step 2.
+
 ## Common Mistakes to Avoid
 
 1. **Hiding the Export button** — must be visible without a menu. The user came here to GET DATA OUT eventually; never make them hunt for it.

@@ -154,6 +154,24 @@ Rewrite the preferences section ONLY when:
 
 If a brand-voice or company-level fact came up (e.g. "we always close with a Calendly link"), update `shared/profile.md` instead — that's the right home for company-wide info.
 
+## Step N: Record the run
+
+Before the final hand-back to the user, log a run record so the system can include this presentation in `dashboard-html` KPIs and learn from how you composed it:
+
+```bash
+. "${HTML_SKILLS_LIB}/memory.sh"
+memory::quick_run skill=present-html \
+  audience="$audience" sections="$section_count" otp="$otp_enabled" \
+  workflow="$workflow_enabled" html_path="$html_path"
+```
+
+If the page is for a specific target (e.g. a pitch deck for a known company), also link it to that target's `past_outreach[]`:
+
+```bash
+slug="$(memory::slugify "$company")"
+memory::add_outreach "$slug" "$HTML_SKILLS_RUN_ID" "$url" "$angle" "pending"
+```
+
 ## Common Mistakes to Avoid
 
 1. **Too many sections** — 5-9 max. Cutting is the work.

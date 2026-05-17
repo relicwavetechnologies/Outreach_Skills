@@ -13,7 +13,8 @@ Turn code changes (a PR, a diff, a branch, a single file) into a visual HTML rev
 
 1. Read `../../shared/profile.md` — for tech audience level (technical / business / mixed).
 2. Read `../../shared/design-tokens.css` — copy into the page's `<style>` block.
-3. Read `## User Preferences` at the bottom. If severity threshold and audience tech-level are learned, skip those questions.
+3. Read `../../shared/components/confidence-dot.html` — use the `.cdot` inline indicators to tag severity on every finding (`cdot-danger` for critical, `cdot-warning` for medium, `cdot-muted` for low/nit). Paste the CSS once into your `<style>`.
+4. Read `## User Preferences` at the bottom. If severity threshold and audience tech-level are learned, skip those questions.
 
 ## Step 1: Gather What You Need
 
@@ -119,6 +120,17 @@ Rewrite preferences ONLY when:
 - Severity threshold has stabilized (user always wants Suggestions included, or always filters them out).
 - Audience tech-level is consistent across runs.
 - User has corrected the same thing twice ("don't include positives" → save that default).
+
+## Step 6: Record the run
+
+Log a run record so dashboard-html can show review activity in the KPI cards:
+
+```bash
+. "${HTML_SKILLS_LIB}/memory.sh"
+memory::quick_run skill=review-html \
+  findings_critical="$crit" findings_medium="$med" findings_low="$low" \
+  audience="$audience" html_path="$html_path"
+```
 
 ## Common Mistakes to Avoid
 

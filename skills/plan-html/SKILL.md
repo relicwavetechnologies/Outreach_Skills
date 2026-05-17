@@ -143,6 +143,19 @@ Rewrite preferences ONLY when:
 
 Planning is context-heavy, so most updates here are about FORMAT (visual component default, sections to always include, depth of risk analysis) — not about content.
 
+## Step 6: Record the run
+
+Log a run record so dashboard-html can show planning activity in the KPI cards:
+
+```bash
+. "${HTML_SKILLS_LIB}/memory.sh"
+memory::quick_run skill=plan-html \
+  plan_type="$plan_type" sections="$section_count" \
+  html_path="$html_path"
+```
+
+`$plan_type` is one of `process | system | project | decision` per Step 1.
+
 ## Common Mistakes to Avoid
 
 1. **Wishy-washy recommendations** — "it depends on your priorities" is not a plan. Pick one. Defend it. The user can argue back.
