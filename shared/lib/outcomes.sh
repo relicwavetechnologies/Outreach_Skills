@@ -117,8 +117,12 @@ outcomes::stats() {
         events: length,
         breakdown: (group_by(.event) | map({(.[0].event): length}) | add // {}),
         unique_runs: (map(.run_id) | unique | length),
-        replied: (map(select(.event=="reply")) | length),
-        meetings: (map(select(.event=="meeting_booked")) | length)
+        # Match the actual event names emitted by outcomes::set_outreach_outcome:
+        #   replied | no_reply | meeting_booked | cold
+        # (Earlier draft used "reply" — integration test caught the mismatch.)
+        replied:   (map(select(.event=="replied"))        | length),
+        no_reply:  (map(select(.event=="no_reply"))       | length),
+        meetings:  (map(select(.event=="meeting_booked")) | length)
       }
   ' "$f"
 }

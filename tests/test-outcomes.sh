@@ -65,18 +65,26 @@ fi
 echo
 echo "▶ T3: stats"
 # Add events across runs to test breakdown.
+# NOTE: use the canonical event name "replied" — outcomes::set_outreach_outcome
+# emits "replied", and outcomes::stats counts that. (Earlier draft of stats
+# wrongly looked for "reply"; the integration test caught it.)
 outcomes::record "page_view" "r2"
-outcomes::record "reply" "r1" '{"slug":"acme"}'
+outcomes::record "replied"   "r1" '{"slug":"acme"}'
+outcomes::record "no_reply"  "r3"
+outcomes::record "meeting_booked" "r4"
+
 stats="$(outcomes::stats 30)"
-assert_eq "$(echo "$stats" | jq -r '.events')"           "5"  "T3.1: total events"
-assert_eq "$(echo "$stats" | jq -r '.unique_runs')"      "2"  "T3.2: unique runs = 2"
-assert_eq "$(echo "$stats" | jq -r '.replied')"          "1"  "T3.3: replied = 1"
-assert_eq "$(echo "$stats" | jq -r '.breakdown.page_view')" "2" "T3.4: 2 page_views"
-assert_eq "$(echo "$stats" | jq -r '.breakdown.scroll_50')" "1" "T3.5: 1 scroll_50"
+assert_eq "$(echo "$stats" | jq -r '.events')"          "7" "T3.1: total events (4 added + 3 prior)"
+assert_eq "$(echo "$stats" | jq -r '.unique_runs')"     "4" "T3.2: unique runs = 4 (r1..r4)"
+assert_eq "$(echo "$stats" | jq -r '.replied')"         "1" "T3.3: replied = 1 (matches 'replied' event)"
+assert_eq "$(echo "$stats" | jq -r '.no_reply')"        "1" "T3.4: no_reply = 1"
+assert_eq "$(echo "$stats" | jq -r '.meetings')"        "1" "T3.5: meetings = 1 (matches meeting_booked)"
+assert_eq "$(echo "$stats" | jq -r '.breakdown.page_view')" "2" "T3.6: 2 page_views in breakdown"
+assert_eq "$(echo "$stats" | jq -r '.breakdown.scroll_50')" "1" "T3.7: 1 scroll_50 in breakdown"
 
 # Days window: 1-day cutoff should still include all (just added).
 short_stats="$(outcomes::stats 1)"
-assert_eq "$(echo "$short_stats" | jq -r '.events')" "5" "T3.6: 1-day window includes recent"
+assert_eq "$(echo "$short_stats" | jq -r '.events')" "7" "T3.8: 1-day window includes recent"
 
 # ── T4: pending_replies + set_outreach_outcome ───────────────────────────
 echo
