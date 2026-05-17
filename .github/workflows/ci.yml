@@ -1,0 +1,69 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: All offline tests + lints
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: System info
+        run: |
+          uname -a
+          bash --version | head -n1
+          jq --version || true
+          python3 --version || true
+          node --version  || true
+
+      - name: Install deps (jq, python3 are pre-installed on ubuntu-latest)
+        run: |
+          set -eux
+          # jq + python3 + node ship by default on ubuntu-latest images.
+          jq --version
+          python3 --version
+          node --version
+
+      - name: Shell syntax check (bash -n all scripts)
+        run: |
+          set -eux
+          fail=0
+          for f in install.sh shared/lib/*.sh tests/*.sh; do
+            bash -n "$f" || fail=1
+          done
+          [ "$fail" = 0 ]
+
+      - name: Lint skills (SKILL.md static analysis)
+        run: bash tests/lint-skills.sh
+
+      - name: Lint JS (track.js + track-server.js)
+        run: bash tests/lint-js.sh
+
+      - name: Test — deploy state machine
+        run: bash tests/test-deploy-dryrun.sh
+
+      - name: Test — memory helpers
+        run: bash tests/test-memory.sh
+
+      - name: Test — csv parser
+        run: bash tests/test-csv.sh
+
+      - name: Test — outcomes
+        run: bash tests/test-outcomes.sh
+
+      - name: Test — tracker (state, inject, scaffold)
+        run: bash tests/test-track.sh
+
+      - name: Test — integration (full pipeline)
+        run: bash tests/test-integration.sh
