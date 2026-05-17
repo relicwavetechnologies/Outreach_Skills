@@ -71,5 +71,8 @@ jobs:
       - name: Test — nudges (proactive startup prompts)
         run: bash tests/test-nudges.sh
 
+      - name: Test — voice (writing-style learning)
+        run: bash tests/test-voice.sh
+
       - name: Test — integration (full pipeline, all libs composed)
         run: bash tests/test-integration.sh

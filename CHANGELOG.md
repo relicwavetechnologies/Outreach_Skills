@@ -6,6 +6,52 @@ This project tracks work in **P-numbered iterations** rather than semver — eac
 
 ---
 
+## [P6] — Voice learning: the system matches how YOU write  *(landed directly on `main`)*
+
+The last big learning gap. Until P6, the system learned about **targets** (research, angles via patterns.sh) and **outcomes** (what worked via track.js + one-tap feedback) but had no model of **the user's writing style**. P6 closes that.
+
+### Added
+
+- **`shared/lib/voice.sh`** + **`shared/lib/voice_consolidate.py`** — the voice learning layer. Reads `memory/runs/*.json` for text samples (`dm_text`, `hero_text`, `trojan_text`, `draft_text`, `shipped_text`), distills into `memory/voice.json`:
+  - **Tone signals** — `avg_sentence_words_dm`, `median_sentence_words_dm`, `avg_dm_words`, `avg_hero_words`, `avg_trojan_words`, `em_dashes_per_dm`, `ellipses_per_dm`, `questions_per_dm`, `lowercase_start_fraction`.
+  - **Openers** — preferred (appearing in ≥ 20% of weighted DMs) and rejected (from explicit `voice_corrections[]`).
+  - **Vocabulary** — words used disproportionately + words to avoid.
+  - **Punctuation signature** — human-readable.
+
+  Time-decay weighting (default half-life: 30 days). Runs without timestamps weight 0.5.
+
+  Python distiller is its own file because bash 3.2 (macOS-shipped) trips on apostrophes and parens inside heredoc'd python — moving the text-analysis logic to `voice_consolidate.py` keeps the shell wrapper parseable on every bash version.
+
+- **CLI commands** on `voice.sh`: `consolidate`, `auto-consolidate`, `report`, `style-directive`, `tone-summary`, `reset`.
+
+- **Skill wiring**:
+  - `outreach-html` Step 3 now calls `voice::auto_consolidate 14` + `voice::style_directive` BEFORE drafting. The directive is a short paragraph the LLM uses as binding context for hero, trojan-horse, and DM prose. If empty (no usable data yet), drafting falls back to `profile.json.brand_voice`.
+  - `mailmerge-html` Step 4 does the same once per batch (voice is user-level, not target-level).
+  - Both skills now emit `dm_text` / `hero_text` / `trojan_text` in their rich run records, so subsequent consolidations have data to learn from.
+  - `dashboard-html` Step 1 also runs `voice::consolidate` and surfaces `voice::tone_summary` as a small card.
+
+- **`stale_voice` nudge kind** in `nudges.sh` — fires when `voice.json` hasn't been refreshed in > 14 days (low severity).
+
+- **`tests/test-voice.sh`** — 28 assertions covering: empty memory → graceful zero, sentence/word stats from seeded DMs, preferred-opener detection at 2/3 threshold, `style_directive` content, `tone_summary` content, time-decay weighting (old outliers get dampened with default 30-day half-life vs. 9999-day no-decay), `voice_corrections[]` flow into rejected/avoid lists, freshness gate on `auto_consolidate`, reset preserves previous, graceful degradation when runs have no text fields.
+
+- **Integration test PHASE 8d** — seeds 3 outreach runs with text samples, consolidates, asserts the openers + tone + style_directive all materialize as the dashboard would see them.
+
+### Test counts
+
+```
+P5  snapshot:  37 + 46 + 28 + 24 + 23 + 28 + 16 + 51        = 253 + 47 lint = 300
+P6  snapshot:  37 + 46 + 28 + 24 + 23 + 28 + 16 + 28 + 57   = 287 + lint = 334
+                                              ↑     ↑
+                                       voice: 28  integration: 51→57
+```
+
+### What the user sees, end-to-end
+
+Before P6: outreach DMs sounded like generic "professional but warm" copy with each run.
+After P6: by the 4th–5th outreach, DMs automatically match your sentence rhythm, openers, vocabulary, and punctuation signature. Without you ever having to tell the system how you write — it learns from the DMs you actually shipped.
+
+---
+
 ## [P4 + P5] — Skill parity, security model docs, integration coverage  *(landed directly on `main`)*
 
 P0–P3 built and polished the core engine. P4/P5 are the cleanup pass that brings every skill to the same standard and locks in the production posture.

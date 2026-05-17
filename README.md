@@ -144,6 +144,8 @@ skills-html/
 │   │   ├── track.sh               # tracker inject + setup wizard + KV sync
 │   │   ├── patterns.sh            # consolidation: runs+outcomes → patterns.json + drift
 │   │   ├── nudges.sh              # proactive startup prompts: pending replies + drift + stale
+│   │   ├── voice.sh               # writing-voice learning: tone signals + style directive
+│   │   ├── voice_consolidate.py   # text-analysis distiller called by voice.sh
 │   │   └── deploy.sh              # Vercel deploy state machine (production-grade)
 │   └── components/                # reusable HTML snippets skills paste into output
 │       ├── confidence-dot.html    # inline confidence indicators (high/medium/low)
@@ -171,6 +173,7 @@ skills-html/
     ├── test-track.sh           # track.sh inject/state/scaffold tests
     ├── test-patterns.sh        # patterns.sh consolidation + drift + lookups
     ├── test-nudges.sh          # nudges.sh startup-prompt assembly
+    ├── test-voice.sh           # voice.sh writing-style learning
     ├── test-integration.sh     # END-TO-END full-pipeline test
     └── smoke-deploy.sh         # real Vercel deploy + teardown
 ```
@@ -280,6 +283,34 @@ export KV_REST_API_TOKEN=...
 bash ~/.claude/skills/html-skills/shared/lib/track.sh sync
 ```
 
+## Voice learning — the system matches how YOU write
+
+`shared/lib/voice.sh` distills your writing voice from text samples in run records (`dm_text`, `hero_text`, `trojan_text`) and produces `memory/voice.json`:
+
+- **Tone signals** — average sentence length in DMs, target hero word count, em-dashes/ellipses/questions per DM, lowercase-sentence-start ratio.
+- **Preferred openers** — phrasings that appear in ≥ 20% of your sent DMs.
+- **Rejected openers** — explicitly flagged via `voice_corrections[]` on a run.
+- **Vocabulary** — words you use disproportionately, plus words you've flagged to avoid.
+- **Punctuation signature** — a human-readable summary like *"em-dashes, lowercase sentence-starts"*.
+
+Time-decay weighting: recent runs count more (default half-life: 30 days).
+
+Skills consult `voice::style_directive` at startup. The directive is a short paragraph the LLM uses as binding context when drafting:
+
+> *"Match the user learned writing voice:*
+> *- Target ~11 words per sentence in DMs.*
+> *- Open DMs with phrasing like: 'saw you', 'quick one'.*
+> *- Words the user actually uses: actually, ship, real.*
+> *- Words to avoid: leverage, synergy, circle back."*
+
+After ~5 outreaches, your future DMs and headlines automatically match the style you've shown the system, without you ever asking. CLI:
+
+```bash
+bash ~/.claude/skills/html-skills/shared/lib/voice.sh consolidate     # rebuild voice.json
+bash ~/.claude/skills/html-skills/shared/lib/voice.sh report          # human rollup
+bash ~/.claude/skills/html-skills/shared/lib/voice.sh tone-summary    # one-liner
+```
+
 ## Consolidation pass — turning runs + outcomes into rules
 
 `shared/lib/patterns.sh` is the pass that makes the system **learn**. It reads every per-run record from `memory/runs/*.json` plus the `past_outreach[]` arrays in `memory/targets/*.json` plus the auto-events in `memory/outcomes/feedback.jsonl`, joins them, and distills three rule kinds into `memory/patterns.json`:
@@ -321,7 +352,8 @@ bash tests/test-outcomes.sh        # 24  — outcomes + one-tap reply prompt
 bash tests/test-track.sh           # 23  — tracker inject/state/scaffold
 bash tests/test-patterns.sh        # 28  — consolidation, drift, lookups
 bash tests/test-nudges.sh          # 16  — proactive startup-prompt assembly
-bash tests/test-integration.sh     # 51  — END-TO-END pipeline (every lib + every skill's run-record)
+bash tests/test-voice.sh           # 28  — writing-voice learning (time-decay, openers, vocab)
+bash tests/test-integration.sh     # 57  — END-TO-END pipeline (every lib + voice flow)
 
 # Static analysis
 bash tests/lint-skills.sh          # SKILL.md frontmatter + bash blocks + helper/component refs
@@ -333,7 +365,7 @@ vercel login    # one-time
 bash tests/smoke-deploy.sh
 ```
 
-**Total: 253 offline assertions** (unit + integration), gated by CI on every push.
+**Total: 287 offline assertions** (unit + integration), gated by CI on every push.
 
 ---
 
