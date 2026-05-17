@@ -37,6 +37,28 @@ The installer will:
 
 That's it. Restart your AI, and the skills are live.
 
+## Quick start
+
+Once installed, in Claude Code or Codex:
+
+```
+"research Stripe"                          → research-html → styled HTML report
+"outreach to John at Acme"                 → outreach-html → personalized page + live URL + DM
+"mailmerge these 20 founders" (with CSV)   → mailmerge-html → N pages + dashboard
+"show me the dashboard"                    → dashboard-html → KPI rollup
+"how's outreach going"                     → dashboard-html (same skill, different prompt)
+```
+
+After your first outreach the system starts learning. After ~10 runs `patterns.json` has enough data to start biasing angle selection and section drafting. Run `dashboard-html` to see the state of the engine at any time.
+
+## Security model
+
+- **Local-only by default.** `~/.cache/html-skills/` is yours. Profile, voice, target memory, run records, and outcome events all live on disk; nothing leaves the machine unless you explicitly deploy.
+- **Deploys are user-controlled.** Vercel auth is per-user. No third party between you and your hosting.
+- **Tracker is opt-in and user-owned.** `track.js` is only injected when `track::enable` has been called. Events POST to a Vercel serverless function YOU deploy to YOUR Vercel KV. No SaaS analytics in the loop. No cookies. No fingerprinting. Honors `Do Not Track`.
+- **No PII leakage.** The server template strips query strings from `page`/`referrer` and caps every string field. Event names are allow-listed. Per-session rate limit.
+- **State is greppable JSON.** If you ever want to audit what the system remembers, every file in `~/.cache/html-skills/memory/` is human-readable. `patterns.sh reset` wipes the learned rules; `memory/targets/<slug>.json` can be edited or removed by hand.
+
 ---
 
 ## The Skills
@@ -299,7 +321,7 @@ bash tests/test-outcomes.sh        # 24  — outcomes + one-tap reply prompt
 bash tests/test-track.sh           # 23  — tracker inject/state/scaffold
 bash tests/test-patterns.sh        # 28  — consolidation, drift, lookups
 bash tests/test-nudges.sh          # 16  — proactive startup-prompt assembly
-bash tests/test-integration.sh     # 45  — END-TO-END pipeline (every lib together)
+bash tests/test-integration.sh     # 51  — END-TO-END pipeline (every lib + every skill's run-record)
 
 # Static analysis
 bash tests/lint-skills.sh          # SKILL.md frontmatter + bash blocks + helper/component refs
@@ -311,7 +333,7 @@ vercel login    # one-time
 bash tests/smoke-deploy.sh
 ```
 
-**Total: 247 offline assertions** (unit + integration), gated by CI on every push.
+**Total: 253 offline assertions** (unit + integration), gated by CI on every push.
 
 ---
 

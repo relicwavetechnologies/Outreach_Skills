@@ -320,6 +320,47 @@ last_after="$(jq -r '.last_consolidated' "$PATTERNS")"
 assert_eq "$last_after" "$last_before" "P8b.7: auto_consolidate skipped (fresh)"
 
 # ╔═════════════════════════════════════════════════════════════════════╗
+# ║  PHASE 8c — Multi-skill run records — dashboard KPI prerequisite    ║
+# ║  Confirms that present/plan/review/editor/deploy all write           ║
+# ║  distinct run records that dashboard-html's KPI math can count.      ║
+# ╚═════════════════════════════════════════════════════════════════════╝
+echo
+echo "▶ PHASE 8c: every skill writes a distinct run record"
+
+before_count="$(find "${SANDBOX}/memory/runs" -name '*.json' | wc -l | tr -d ' ')"
+
+# Simulate each non-outreach skill writing its run via the same API
+# the SKILL.md prose calls.
+HTML_SKILLS_RUN_ID="r-present-1" \
+  memory::quick_run skill=present-html audience=founder sections=7 otp=true workflow=false html_path=/tmp/p.html >/dev/null
+
+HTML_SKILLS_RUN_ID="r-plan-1" \
+  memory::quick_run skill=plan-html plan_type=process sections=5 html_path=/tmp/pl.html >/dev/null
+
+HTML_SKILLS_RUN_ID="r-review-1" \
+  memory::quick_run skill=review-html findings_critical=2 findings_medium=4 findings_low=7 \
+    audience=technical html_path=/tmp/r.html >/dev/null
+
+HTML_SKILLS_RUN_ID="r-editor-1" \
+  memory::quick_run skill=editor-html pattern=kanban item_count=23 \
+    export_format=json html_path=/tmp/e.html >/dev/null
+
+HTML_SKILLS_RUN_ID="r-deploy-1" \
+  memory::quick_run skill=deploy-html source_file=/tmp/x.html url=https://x.example custom_domain=none >/dev/null
+
+after_count="$(find "${SANDBOX}/memory/runs" -name '*.json' | wc -l | tr -d ' ')"
+added=$((after_count - before_count))
+assert_eq "$added" "5" "P8c.1: 5 distinct run records added (one per skill)"
+
+# Each one should have the correct .skill field.
+for rid_skill in r-present-1:present-html r-plan-1:plan-html \
+                 r-review-1:review-html r-editor-1:editor-html r-deploy-1:deploy-html; do
+  rid="${rid_skill%%:*}"; expected_skill="${rid_skill##*:}"
+  got_skill="$(jq -r '.skill' "${SANDBOX}/memory/runs/${rid}.json" 2>/dev/null)"
+  assert_eq "$got_skill" "$expected_skill" "P8c.${rid}: ${rid} has .skill = ${expected_skill}"
+done
+
+# ╔═════════════════════════════════════════════════════════════════════╗
 # ║  PHASE 9 — Idempotency: re-running phase 2 doesn't dup facts        ║
 # ╚═════════════════════════════════════════════════════════════════════╝
 echo

@@ -6,6 +6,28 @@ This project tracks work in **P-numbered iterations** rather than semver — eac
 
 ---
 
+## [P4 + P5] — Skill parity, security model docs, integration coverage  *(landed directly on `main`)*
+
+P0–P3 built and polished the core engine. P4/P5 are the cleanup pass that brings every skill to the same standard and locks in the production posture.
+
+### P4 — Skill parity (run logging across all 9 skills)
+
+The four non-outreach skills (`present-html`, `plan-html`, `review-html`, `editor-html`) plus `deploy-html` standalone now each write a `memory::quick_run` record on success. Before P4 they ran fine but were invisible to `dashboard-html`'s KPI math and to `patterns.sh` consolidation. The dashboard's "Runs · 30d" KPI is now correct regardless of which skill the user invokes.
+
+- `present-html`: logs audience, sections, otp, workflow + (when target-specific) calls `memory::add_outreach` so the deck lives in the target's `past_outreach[]`.
+- `plan-html`: logs `plan_type` (process / system / project / decision) + section count.
+- `review-html`: logs finding counts (critical/medium/low) + audience. Also references `shared/components/confidence-dot.html` so severity is visible inline on every finding — same visual grammar as research-html and outreach-html.
+- `editor-html`: logs `pattern` (kanban / sortable / table / filter-tag / config-form / prompt-tuner) + item count + export format.
+- `deploy-html`: logs standalone deploys only (skips when called as a sub-step of outreach-html / mailmerge-html, which log their own runs).
+
+### P5 — Polish + security model
+
+- **README**: new "Quick start" section putting `dashboard-html` front-and-center for new users; new "Security model" section documenting the local-first architecture (cache is local, deploys are user-controlled, tracker is opt-in and user-owned, no third-party in the loop).
+- **`tests/test-integration.sh` PHASE 8c**: writes one run record per non-outreach skill (5 total) and asserts each is distinct with the correct `.skill` field. Locks in the multi-skill KPI accounting that dashboard-html depends on.
+- 247 → 253 offline assertions (+6 in PHASE 8c).
+
+---
+
 ## [P3] — The user-facing capstone: dashboard + nudges  *(landed directly on `main`)*
 
 P0–P2d built the engine. P3 is the surface that turns the engine into something the user can actually see and act on.
