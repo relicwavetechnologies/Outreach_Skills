@@ -65,5 +65,8 @@ jobs:
       - name: Test — tracker (state, inject, scaffold)
         run: bash tests/test-track.sh
 
-      - name: Test — integration (full pipeline)
+      - name: Test — patterns (consolidation, drift, lookups)
+        run: bash tests/test-patterns.sh
+
+      - name: Test — integration (full pipeline, all libs composed)
         run: bash tests/test-integration.sh

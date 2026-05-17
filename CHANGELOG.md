@@ -6,6 +6,54 @@ This project tracks work in **P-numbered iterations** rather than semver — eac
 
 ---
 
+## [P2d] — Consolidation pass: the system learns  *(branch: `p2d-consolidation`)*
+
+The loop closes. P0 made deploys reliable, P1 added memory, P2a added volume, P2b added the outcomes signal — but until now nothing was *reading* the outcomes to make future decisions smarter. P2d is that read pass.
+
+### Added
+
+- **`shared/lib/patterns.sh`** — the consolidation pass. Reads `memory/runs/*.json` + `memory/outcomes/feedback.jsonl` + `memory/targets/*.json`, joins them, distills into rules at `memory/patterns.json`. Three rule kinds:
+  - **`cluster_angle`** — for each `(cluster, angle)` pair seen ≥ 2 times: reply rate, decided count, confidence.
+  - **`section_survival`** — for each section name in draft/shipped arrays: `survival_rate = shipped / drafted`, with a recommendation bucket (`always | usually | rarely | skip`).
+  - **`section_engagement`** — when a section's presence correlates with a ≥ 0.10 absolute reply-rate delta.
+
+  Plus drift detection: previous `patterns.json` is rotated to `patterns.previous.json` each consolidation. Rules whose `reply_rate` or `survival_rate` moved by ≥ 0.30 between runs are surfaced as `drift_alerts[]`.
+
+- **CLI commands** on `patterns.sh`:
+  - `consolidate` — rebuild patterns.json
+  - `auto-consolidate [days]` — no-op if patterns.json is fresh (default 7d)
+  - `report [days]` — human-readable rollup
+  - `drift` — show drift alerts
+  - `reset` — wipe patterns.json (history preserved)
+  - `angle-for-cluster <cluster> [fallback]` — used by mailmerge
+  - `section-recommendation <section>` — used by outreach/research
+
+- **Skill wiring**:
+  - `mailmerge-html` now calls `patterns::angle_for_cluster` per cluster to pick the highest-evidence angle. Falls back to `profile.json.company.pitch_angle` when no data. Surfaces drift alerts in the plan-approval pause.
+  - `outreach-html` and `research-html` consult `patterns::section_recommendation` before drafting heavy insight sections. `skip` skips, `rarely` shrinks, `always`/`usually`/`unknown` draft normally.
+  - All three skills now write *richer* run records (with `cluster`, `draft_sections`, `shipped_sections`) via `memory::write_run` JSON form, so subsequent consolidations have the data to compute everything.
+
+- **`tests/test-patterns.sh`** — 28 assertions covering empty memory, cluster_angle synthesis with mixed outcomes, section_survival across drafted/shipped diffs, section_engagement deltas, lookups with fallback, drift detection across consolidations, auto-consolidate freshness, report rendering, reset preserving previous.
+
+### Fixed
+
+- **`memory::write_run` was hostile to multiple writes from the same shell.** It used `$HTML_SKILLS_RUN_ID` env var as the destination filename — so a skill writing two run records (one quick + one rich, common pattern in P2d) overwrote the first. New behavior: prefer `.run_id` from the JSON content, fall back to env, fall back to generated. Backwards-compatible; surfaced by the new integration assertions.
+
+### CI
+
+- `test-patterns.sh` and the extended `test-integration.sh` (45 assertions, +7 from P2c) are gated by `.github/workflows/ci.yml`.
+
+### Test counts
+
+```
+P2c snapshot:  37 + 46 + 28 + 24 + 23 + 38 = 196   + 47 lint = 243
+P2d snapshot:  37 + 46 + 28 + 24 + 23 + 28 + 45 = 231 + 47 lint = 278
+                                       ↑    ↑
+                            patterns: 28  integration: 38→45
+```
+
+---
+
 ## [P2c] — Quality, hardening, and CI  *(branch: `p2c-harden`)*
 
 The first PR in this project that adds **no new features.** Everything here is making what we've already shipped trustworthy.

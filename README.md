@@ -119,6 +119,7 @@ skills-html/
 │   │   ├── csv.sh                 # RFC 4180 CSV parser (python3-backed)
 │   │   ├── outcomes.sh            # feedback.jsonl append/query + one-tap reply prompt
 │   │   ├── track.sh               # tracker inject + setup wizard + KV sync
+│   │   ├── patterns.sh            # consolidation: runs+outcomes → patterns.json + drift
 │   │   └── deploy.sh              # Vercel deploy state machine (production-grade)
 │   └── components/                # reusable HTML snippets skills paste into output
 │       ├── confidence-dot.html    # inline confidence indicators (high/medium/low)
@@ -142,6 +143,8 @@ skills-html/
     ├── test-csv.sh             # csv.sh parser tests (RFC 4180 quirks)
     ├── test-outcomes.sh        # outcomes.sh + one-tap reply prompt tests
     ├── test-track.sh           # track.sh inject/state/scaffold tests
+    ├── test-patterns.sh        # patterns.sh consolidation + drift + lookups
+    ├── test-integration.sh     # END-TO-END full-pipeline test
     └── smoke-deploy.sh         # real Vercel deploy + teardown
 ```
 
@@ -250,6 +253,34 @@ export KV_REST_API_TOKEN=...
 bash ~/.claude/skills/html-skills/shared/lib/track.sh sync
 ```
 
+## Consolidation pass — turning runs + outcomes into rules
+
+`shared/lib/patterns.sh` is the pass that makes the system **learn**. It reads every per-run record from `memory/runs/*.json` plus the `past_outreach[]` arrays in `memory/targets/*.json` plus the auto-events in `memory/outcomes/feedback.jsonl`, joins them, and distills three rule kinds into `memory/patterns.json`:
+
+| Rule kind | Computed from | Read by |
+|---|---|---|
+| **`cluster_angle`** | every `(cluster, angle)` pair seen ≥ 2 times → reply rate + confidence | `mailmerge-html` picks the highest-evidence angle per cluster |
+| **`section_survival`** | per section, `shipped / drafted` ratio → `always` / `usually` / `rarely` / `skip` | `outreach-html` and `research-html` decide whether to draft an insight section |
+| **`section_engagement`** | reply-rate delta when a section is present vs absent (≥ 0.10 absolute) | informational — printed by `patterns::report` |
+
+Plus drift detection: the previous `patterns.json` is rotated; rules whose reply rate or survival rate moved by ≥ 0.30 between consolidations get a `drift_alerts[]` entry that skills surface in their plan-approval pauses.
+
+```bash
+# Re-build patterns (run periodically or whenever you want fresh recommendations)
+bash ~/.claude/skills/html-skills/shared/lib/patterns.sh consolidate
+
+# Human-readable rollup
+bash ~/.claude/skills/html-skills/shared/lib/patterns.sh report
+
+# What angles are working for which cluster?
+bash ~/.claude/skills/html-skills/shared/lib/patterns.sh angle-for-cluster series-a-ai
+
+# Which insight sections should we even bother drafting?
+bash ~/.claude/skills/html-skills/shared/lib/patterns.sh section-recommendation risk_flags
+```
+
+Skills call `patterns::auto_consolidate 7` at startup — it's a no-op when patterns.json is < 7 days old, so the cost is negligible.
+
 ## Testing
 
 Every test runs offline by default. The CI workflow (`.github/workflows/ci.yml`) gates pushes and PRs on the full suite.
@@ -261,7 +292,8 @@ bash tests/test-memory.sh          # 46  — memory helpers
 bash tests/test-csv.sh             # 28  — CSV parser (RFC 4180 quirks)
 bash tests/test-outcomes.sh        # 24  — outcomes + one-tap reply prompt
 bash tests/test-track.sh           # 23  — tracker inject/state/scaffold
-bash tests/test-integration.sh     # 38  — END-TO-END pipeline (every lib together)
+bash tests/test-patterns.sh        # 28  — consolidation, drift, lookups
+bash tests/test-integration.sh     # 45  — END-TO-END pipeline (every lib together)
 
 # Static analysis
 bash tests/lint-skills.sh          # SKILL.md frontmatter + bash blocks + helper/component refs
@@ -273,7 +305,7 @@ vercel login    # one-time
 bash tests/smoke-deploy.sh
 ```
 
-**Total: 196 offline assertions** (unit + integration), gated by CI on every push.
+**Total: 231 offline assertions** (unit + integration), gated by CI on every push.
 
 ---
 
