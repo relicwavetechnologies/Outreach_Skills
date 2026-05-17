@@ -16,11 +16,11 @@ GITHUB_REPO="Outreach_Skills"
 GITHUB_BRANCH="main"
 BASE_URL="https://raw.githubusercontent.com/${GITHUB_USERNAME}/${GITHUB_REPO}/${GITHUB_BRANCH}"
 
-ALL_SKILLS=(research-html present-html deploy-html outreach-html mailmerge-html plan-html review-html editor-html)
+ALL_SKILLS=(research-html present-html deploy-html outreach-html mailmerge-html dashboard-html plan-html review-html editor-html)
 OUTREACH_BUNDLE=(research-html present-html deploy-html outreach-html mailmerge-html)
 SHARED_FILES=(profile.md design-tokens.css SCHEMAS.md)
 SHARED_LIB_FILES=(log.sh memory.sh deploy.sh csv.sh outcomes.sh track.sh patterns.sh)
-SHARED_COMPONENT_FILES=(confidence-dot.html sources-footer.html insight-block.html mailmerge-dashboard.html track.js track-server.js)
+SHARED_COMPONENT_FILES=(confidence-dot.html sources-footer.html insight-block.html mailmerge-dashboard.html dashboard.html track.js track-server.js)
 
 # ── Colors (tput when available, fallback to ANSI) ───────────────────────
 # Guard tput failures so a missing $TERM doesn't kill the script under `set -e`.
@@ -261,6 +261,7 @@ ${BOLD}Try these in Claude Code or Codex:${RESET}
   ${CYAN}Research:${RESET}     "Research Acme Corp for me"
   ${CYAN}Outreach:${RESET}     "Do an outreach to John at Acme"
   ${CYAN}Mailmerge:${RESET}    "Mailmerge to these 20 founders in this CSV"
+  ${CYAN}Dashboard:${RESET}    "Show me the dashboard" / "how's outreach going"
   ${CYAN}Present:${RESET}      "Turn this doc into a presentation"
   ${CYAN}Plan:${RESET}         "Plan out how we'd onboard our first 10 customers"
   ${CYAN}Review:${RESET}       "Review the latest PR for me"
