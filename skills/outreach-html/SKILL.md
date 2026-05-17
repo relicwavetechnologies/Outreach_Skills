@@ -30,9 +30,9 @@ End-to-end personalized outreach pipeline. Research the target → build a one-o
    ```
    This emits one JSON line per outreach > 24h old still marked `pending`. For each, ask the user briefly:
    > *"Quick one before we start — John @ Acme (DMed 2d ago, SDR-hiring angle): reply / no reply / not yet?"*
-   Accept short answers (`y`/`n`/`nyt` or any of: `replied | no_reply | pending | meeting_booked | cold`). Update each:
+   Accept short answers (`y`/`n`/`nyt` or any of: `replied | no_reply | pending | meeting_booked | cold`). Update each (substitute the slug, run_id, and outcome from the JSON line above and the user's reply):
    ```bash
-   outcomes::set_outreach_outcome <slug> <run_id> <outcome>
+   outcomes::set_outreach_outcome "$slug" "$run_id" "$outcome"
    ```
    This is the highest-signal feedback the system gets. Two taps. Then proceed.
 

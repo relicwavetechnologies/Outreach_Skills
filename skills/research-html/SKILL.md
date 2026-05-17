@@ -201,13 +201,13 @@ Every URL you fetched, with the date. Two columns: source / used for. See `share
 
 - **Filename:** `research-<slug>-<YYYY-MM-DD>.html`. Save to current working directory.
 - **Open in browser** if running locally: `open <file>` on macOS, `xdg-open` on Linux.
-- **Log the run** before reporting to user:
+- **Log the run** before reporting to user. The skill is expected to have already populated `$slug`, `$depth`, `$slots_filled`, `$sources_count`, and `$html_path` as shell variables earlier in the run:
 
 ```bash
 . "${HTML_SKILLS_LIB}/memory.sh"
-memory::quick_run skill=research-html target_slug=<slug> \
-  depth=<quick|standard|deep> slots_filled=<n> sources=<n> \
-  html_path=<absolute-path>
+memory::quick_run skill=research-html target_slug="$slug" \
+  depth="$depth" slots_filled="$slots_filled" sources="$sources_count" \
+  html_path="$html_path"
 ```
 
 - **Brief summary to user** (3-4 lines max):
