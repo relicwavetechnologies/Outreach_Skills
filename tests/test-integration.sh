@@ -37,6 +37,8 @@ export NO_COLOR=1
 . "${LIB}/outcomes.sh"
 # shellcheck source=/dev/null
 . "${LIB}/track.sh"
+# shellcheck source=/dev/null
+. "${LIB}/patterns.sh"
 # Don't source deploy.sh — invoke as a sub-process like skills do.
 
 memory::init
@@ -253,6 +255,69 @@ echo "▶ PHASE 8: outcomes::stats rollup"
 stats="$(outcomes::stats 30)"
 assert_eq "$(echo "$stats" | jq -r '.replied')" "1" "P8.1: replied count = 1 in last 30 days"
 assert_eq "$(echo "$stats" | jq -r '.unique_runs')" "1" "P8.2: unique_runs = 1"
+
+# ╔═════════════════════════════════════════════════════════════════════╗
+# ║  PHASE 8b — Consolidation closes the loop                           ║
+# ║  Run patterns::consolidate over the seeded run + outcome and verify ║
+# ║  the lookups skills will actually call return sensible values.      ║
+# ╚═════════════════════════════════════════════════════════════════════╝
+echo
+echo "▶ PHASE 8b: patterns consolidation + lookups"
+
+# Make the run record richer (so section_survival can compute something
+# meaningful) and tag a cluster so cluster_angle has a real bucket.
+# We already wrote a run via memory::quick_run in PHASE 6; overwrite it
+# with a richer JSON record now via memory::write_run.
+echo "$(jq -nc \
+  --arg rid "test-run-1" --arg sk outreach-html --arg sl "$SLUG" \
+  --arg an "sdr-hiring" --arg cl "series-a-ai" '
+  {
+    run_id:$rid, skill:$sk, target_slug:$sl, angle:$an, cluster:$cl,
+    draft_sections:   ["hero","we_get_you","workflow","risk_flags","cta"],
+    shipped_sections: ["hero","we_get_you","workflow","cta"]
+  }')" | memory::write_run >/dev/null
+
+patterns::consolidate >/dev/null 2>&1
+PATTERNS="${SANDBOX}/memory/patterns.json"
+assert_file_exists "$PATTERNS" "P8b.1: patterns.json created"
+
+# Decided outreach count should reflect the replied outreach from PHASE 7.
+decided="$(jq -r '.decided_outreaches' "$PATTERNS")"
+assert_eq "$decided" "1" "P8b.2: 1 decided outreach (replied in PHASE 7)"
+
+# Lookup: best angle for series-a-ai. With only 1 evidence run we'd be
+# below the n>=2 cutoff for emitting a cluster_angle rule. Verify the
+# graceful fallback path:
+ang="$(patterns::angle_for_cluster series-a-ai "FALLBACK_ANGLE")"
+assert_eq "$ang" "FALLBACK_ANGLE" "P8b.3: 1-run insufficient evidence → falls back"
+
+# Add a second seed run for the same (cluster, angle) so we cross the
+# n>=2 threshold, plus an outreach with replied so reply_rate is well-defined.
+memory::add_outreach "$SLUG" "test-run-2" "$DEPLOY_URL" "sdr-hiring" "replied"
+echo "$(jq -nc \
+  --arg rid "test-run-2" --arg sk outreach-html --arg sl "$SLUG" \
+  --arg an "sdr-hiring" --arg cl "series-a-ai" '
+  {
+    run_id:$rid, skill:$sk, target_slug:$sl, angle:$an, cluster:$cl,
+    draft_sections:   ["hero","we_get_you","workflow","risk_flags","cta"],
+    shipped_sections: ["hero","we_get_you","workflow","cta"]
+  }')" | memory::write_run >/dev/null
+
+patterns::consolidate >/dev/null 2>&1
+ang="$(patterns::angle_for_cluster series-a-ai "FALLBACK")"
+assert_eq "$ang" "sdr-hiring" "P8b.4: 2-run evidence → angle_for_cluster returns the angle"
+
+# Section recommendation: hero shipped in both → 'always'; risk_flags cut → 'skip'.
+rec="$(patterns::section_recommendation hero)"
+assert_eq "$rec" "always" "P8b.5: section_recommendation(hero) = always"
+rec="$(patterns::section_recommendation risk_flags)"
+assert_eq "$rec" "skip"   "P8b.6: section_recommendation(risk_flags) = skip"
+
+# auto_consolidate: fresh window → no-op.
+last_before="$(jq -r '.last_consolidated' "$PATTERNS")"
+patterns::auto_consolidate 7 >/dev/null 2>&1
+last_after="$(jq -r '.last_consolidated' "$PATTERNS")"
+assert_eq "$last_after" "$last_before" "P8b.7: auto_consolidate skipped (fresh)"
 
 # ╔═════════════════════════════════════════════════════════════════════╗
 # ║  PHASE 9 — Idempotency: re-running phase 2 doesn't dup facts        ║
