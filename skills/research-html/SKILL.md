@@ -201,14 +201,28 @@ Every URL you fetched, with the date. Two columns: source / used for. See `share
 
 - **Filename:** `research-<slug>-<YYYY-MM-DD>.html`. Save to current working directory.
 - **Open in browser** if running locally: `open <file>` on macOS, `xdg-open` on Linux.
-- **Log the run** before reporting to user. The skill is expected to have already populated `$slug`, `$depth`, `$slots_filled`, `$sources_count`, and `$html_path` as shell variables earlier in the run:
+- **Log the run** before reporting to user. The skill is expected to have already populated `$slug`, `$depth`, `$slots_filled`, `$sources_count`, `$html_path`, and the section CSV variables earlier in the run:
 
 ```bash
 . "${HTML_SKILLS_LIB}/memory.sh"
+
+# Quick form — scalar fields.
 memory::quick_run skill=research-html target_slug="$slug" \
   depth="$depth" slots_filled="$slots_filled" sources="$sources_count" \
   html_path="$html_path"
+
+# Rich form — section survival data for consolidation.
+echo "$(jq -nc \
+    --arg rid "$HTML_SKILLS_RUN_ID" --arg sk research-html \
+    --arg sl "$slug" --arg dp "$depth" \
+    --arg draft "$draft_sections_csv" --arg ship "$shipped_sections_csv" \
+    '{run_id:$rid, skill:$sk, target_slug:$sl, depth:$dp,
+      draft_sections: ($draft|split(",")|map(select(length>0))),
+      shipped_sections: ($ship|split(",")|map(select(length>0)))}')" \
+  | memory::write_run >/dev/null
 ```
+
+Also consult learned patterns before drafting heavy insight sections — `patterns::section_recommendation "<section>"` returns `always | usually | rarely | skip`. Skip sections the user has cut 4+ runs in a row.
 
 - **Brief summary to user** (3-4 lines max):
   - What was found (1 line)

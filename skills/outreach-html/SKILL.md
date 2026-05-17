@@ -164,6 +164,25 @@ Single self-contained `.html` file. Tokens copied from `shared/design-tokens.css
 
 These are the artifacts that turn outreach from "informed" into "persuasive." Generate them once you have the research summary confirmed (after Step 2 pause). Most of these go directly into the page; the ones that don't go into your final hand-back message.
 
+**First, consult learned patterns** to decide which insight sections to even draft. Older drafts that the user has consistently cut don't need to be re-generated:
+
+```bash
+. "${HTML_SKILLS_LIB}/patterns.sh"
+patterns::auto_consolidate 7 >/dev/null 2>&1   # no-op if fresh
+
+# For each candidate section, decide whether to draft it:
+for sec in hooks trojan_horse why_matters considered risk_flags; do
+  rec="$(patterns::section_recommendation "$sec")"
+  case "$rec" in
+    always|usually|unknown) draft_section "$sec" ;;
+    rarely)                 draft_section "$sec" --short ;;  # smaller, less prominent
+    skip)                   :                              ;;  # don't draft
+  esac
+done
+```
+
+`unknown` (no historical evidence) means "draft it" — we need data before we can prune. `skip` only fires after consistent user cuts (survival_rate < 0.20).
+
 - **Hooks (3–5, ranked)** — specific opener sentences. Most-promising first, ranked by likely punch. The TOP hook becomes the Hero headline. The next 1–2 become "We Get You" card themes.
 - **Trojan-Horse one-liner** — *"If I had to pitch them in 1 sentence: ___."* This becomes the page subhead AND the first line of the suggested DM. Forces synthesis.
 - **Why This Matters For You (per pain)** — every pain point gets framed through `profile.json`'s `pitch_angle`. These are the labels under each "We Get You" card.
@@ -315,18 +334,31 @@ After a successful deploy, immediately:
 
 ```bash
 . "${HTML_SKILLS_LIB}/memory.sh"
-slug="$(memory::slugify "<company>")"
+slug="$(memory::slugify "$company")"
 
 # Record this outreach attempt against the target.
-memory::add_outreach "$slug" "$HTML_SKILLS_RUN_ID" "<live-url>" "<angle-used>" "pending"
+memory::add_outreach "$slug" "$HTML_SKILLS_RUN_ID" "$url" "$angle" "pending"
 
-# Log the full run (insights generated, sections shipped, edits user made).
+# Quick form — for the simple scalar fields.
 memory::quick_run skill=outreach-html target_slug="$slug" \
-  angle="<angle-used>" otp=true workflow=true \
-  url="<live-url>" html_path="<absolute-path>"
+  angle="$angle" otp="$otp_enabled" workflow="$workflow_enabled" \
+  url="$url" html_path="$html_path"
+
+# Rich form — adds the section arrays so the consolidation pass can
+# compute section_survival rules. $draft_sections_csv and
+# $shipped_sections_csv are comma-separated lists you populated while
+# building the page.
+echo "$(jq -nc \
+    --arg rid "$HTML_SKILLS_RUN_ID" --arg sk outreach-html \
+    --arg sl "$slug" --arg an "$angle" \
+    --arg draft "$draft_sections_csv" --arg ship "$shipped_sections_csv" \
+    '{run_id:$rid, skill:$sk, target_slug:$sl, angle:$an,
+      draft_sections: ($draft|split(",")|map(select(length>0))),
+      shipped_sections: ($ship|split(",")|map(select(length>0)))}')" \
+  | memory::write_run >/dev/null
 ```
 
-**Why this matters:** tomorrow's run (or `mailmerge-html`'s 20-target batch) reads `past_outreach[]` to avoid repeating angles, and the run record is what `patterns.json` consolidation distills from. Without these two writes, the system can't learn.
+**Why this matters:** tomorrow's run (or `mailmerge-html`'s 20-target batch) reads `past_outreach[]` to avoid repeating angles, and the run record (with `draft_sections` + `shipped_sections`) is what `patterns.json` consolidation distills from. Without these writes, the system can't learn what's working vs. what you keep cutting.
 
 ## Step 7: Update Preferences & Profile
 

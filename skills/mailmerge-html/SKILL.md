@@ -124,12 +124,29 @@ For each row:
 
 ### Angle selection per cluster
 
-Read `patterns.json`. If a rule with high `evidence_runs` matches a cluster, use that angle. Example pattern:
-```
-"hooks-with-quotes-win" → evidence_runs:8 → use quote-led hooks for trust-building clusters
+Source `patterns.sh` and call `patterns::angle_for_cluster` per cluster. It returns the highest-confidence angle from `~/.cache/html-skills/memory/patterns.json` for that cluster (or, if none, the best overall angle, or the fallback you pass in).
+
+```bash
+. "${HTML_SKILLS_LIB}/patterns.sh"
+# Try to keep patterns.json fresh — no-op if updated within 7 days.
+patterns::auto_consolidate 7 >/dev/null 2>&1
+
+fallback_angle="$(jq -r '.company.pitch_angle // empty' ~/.cache/html-skills/memory/profile.json 2>/dev/null)"
+angle="$(patterns::angle_for_cluster "$cluster" "$fallback_angle")"
 ```
 
-If no relevant pattern OR `patterns.json` is empty, fall back to `profile.json.company.pitch_angle`.
+If `patterns.json` is empty (no consolidated runs yet) or the cluster has no high-evidence rule, the function falls back to `profile.json.company.pitch_angle`. This means **the very first batch a user runs will use their default angle; subsequent batches benefit from accumulated evidence.**
+
+After selecting, surface the reasoning in the dashboard's "Why this angle" panel — pull the rule directly:
+
+```bash
+jq -r --arg c "$cluster" --arg a "$angle" \
+  '.rules[] | select(.kind=="cluster_angle" and .cluster==$c and .angle==$a) |
+   "\(.evidence_runs) runs, reply rate \( ((.reply_rate // 0) * 100) | floor )%, confidence \(.confidence)"' \
+  ~/.cache/html-skills/memory/patterns.json
+```
+
+If a `drift_alerts[]` entry exists for the selected angle (direction=down), include a small caveat in the plan-approval pause: *"FYI: reply rate for `scale-outbound` dropped from 55% to 22% in your last consolidation — worth verifying before the batch."*
 
 ### Pre-skip checks per target
 
@@ -168,7 +185,21 @@ For each target NOT marked skipped:
 3. **Generate the HTML page** — same structure as `outreach-html` (OTP gate, hero, we-get-you, problem, workflow comparison if enabled, solution, results, CTA, sources footer).
 4. **Inject tracker (if enabled)** — `track::inject "<html-file>" "<per-target run_id>"`. No-op if `track::is_enabled` is false. Each target gets its own run_id so events route correctly.
 5. **Deploy** — `bash "$DEPLOY_SH" ship "<file>" --project "<user-company>-mailmerge"`. Auth re-verify is handled by deploy.sh. Capture URL from last line of stdout.
-6. **Record** — `memory::add_outreach <slug> <run_id> <url> <angle> "pending"` and `memory::quick_run skill=mailmerge-html ...`.
+6. **Record** — `memory::add_outreach "$slug" "$run_id" "$url" "$angle" "pending"` AND log the run. Crucially, include `cluster=<cluster-id>` and `draft_sections` / `shipped_sections` in the run record so the next consolidation pass can compute per-cluster angle effectiveness and per-section survival rates:
+   ```bash
+   memory::quick_run skill=mailmerge-html target_slug="$slug" \
+     angle="$angle" cluster="$cluster" otp=true workflow=true \
+     url="$url"
+   # For rich data (sections shipped, edits made), use the JSON form:
+   echo "$(jq -nc \
+     --arg rid "$run_id" --arg sk mailmerge-html --arg sl "$slug" \
+     --arg an "$angle" --arg cl "$cluster" \
+     --arg draft "$draft_sections_csv" --arg ship "$shipped_sections_csv" \
+     '{run_id:$rid, skill:$sk, target_slug:$sl, angle:$an, cluster:$cl,
+       draft_sections: ($draft|split(",")|map(select(length>0))),
+       shipped_sections: ($ship|split(",")|map(select(length>0)))}')" \
+     | memory::write_run >/dev/null
+   ```
 
 ### Parallelism
 
