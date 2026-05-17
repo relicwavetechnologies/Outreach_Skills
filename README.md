@@ -48,6 +48,7 @@ That's it. Restart your AI, and the skills are live.
 | **deploy-html**    | Puts any HTML file on a live URL via Vercel. First time it walks setup, then it's silent.  |
 | **outreach-html**  | Full pipeline — research a founder, build a personalized page, deploy, hand back the link. |
 | **mailmerge-html** | Batch outreach: CSV → N personalized pages → N URLs + DMs + one summary dashboard.        |
+| **dashboard-html** | Meta-view: KPI cards, top angles, pending follow-ups, drift alerts, recent targets.        |
 | **plan-html**      | Interactive planning docs — process, system, project, or decision. Embedded visuals.       |
 | **review-html**    | Code/PR review as a visual HTML report — severity-coded findings, annotated diffs.         |
 | **editor-html**    | Generates a single-file HTML editor for your data (kanban, table, sortable, prompt tuner). |
@@ -120,12 +121,14 @@ skills-html/
 │   │   ├── outcomes.sh            # feedback.jsonl append/query + one-tap reply prompt
 │   │   ├── track.sh               # tracker inject + setup wizard + KV sync
 │   │   ├── patterns.sh            # consolidation: runs+outcomes → patterns.json + drift
+│   │   ├── nudges.sh              # proactive startup prompts: pending replies + drift + stale
 │   │   └── deploy.sh              # Vercel deploy state machine (production-grade)
 │   └── components/                # reusable HTML snippets skills paste into output
 │       ├── confidence-dot.html    # inline confidence indicators (high/medium/low)
 │       ├── sources-footer.html    # citations block at end of every report
 │       ├── insight-block.html     # the visual grammar for insight sections
 │       ├── mailmerge-dashboard.html # batch summary: filter chips, copy-DM, open-all
+│       ├── dashboard.html         # P3 meta-view: KPI cards, top angles, drift, pending
 │       ├── track.js               # ~2 KB privacy-respecting page tracker (opt-in)
 │       └── track-server.js        # Vercel KV serverless template (user-owned endpoint)
 ├── skills/
@@ -134,6 +137,7 @@ skills-html/
 │   ├── deploy-html/SKILL.md
 │   ├── outreach-html/SKILL.md
 │   ├── mailmerge-html/SKILL.md
+│   ├── dashboard-html/SKILL.md
 │   ├── plan-html/SKILL.md
 │   ├── review-html/SKILL.md
 │   └── editor-html/SKILL.md
@@ -144,6 +148,7 @@ skills-html/
     ├── test-outcomes.sh        # outcomes.sh + one-tap reply prompt tests
     ├── test-track.sh           # track.sh inject/state/scaffold tests
     ├── test-patterns.sh        # patterns.sh consolidation + drift + lookups
+    ├── test-nudges.sh          # nudges.sh startup-prompt assembly
     ├── test-integration.sh     # END-TO-END full-pipeline test
     └── smoke-deploy.sh         # real Vercel deploy + teardown
 ```
@@ -293,6 +298,7 @@ bash tests/test-csv.sh             # 28  — CSV parser (RFC 4180 quirks)
 bash tests/test-outcomes.sh        # 24  — outcomes + one-tap reply prompt
 bash tests/test-track.sh           # 23  — tracker inject/state/scaffold
 bash tests/test-patterns.sh        # 28  — consolidation, drift, lookups
+bash tests/test-nudges.sh          # 16  — proactive startup-prompt assembly
 bash tests/test-integration.sh     # 45  — END-TO-END pipeline (every lib together)
 
 # Static analysis
@@ -305,7 +311,7 @@ vercel login    # one-time
 bash tests/smoke-deploy.sh
 ```
 
-**Total: 231 offline assertions** (unit + integration), gated by CI on every push.
+**Total: 247 offline assertions** (unit + integration), gated by CI on every push.
 
 ---
 

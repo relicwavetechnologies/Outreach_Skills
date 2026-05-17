@@ -28,12 +28,17 @@ The volume leverage move. Feed a CSV (or pasted list). Get N personalized pages 
    ```
    Source `log.sh`, `memory.sh`, `csv.sh`, `outcomes.sh`, `track.sh`, and prepare to call `deploy.sh`.
 
-7. **One-tap pending-reply prompt.** ONCE per session, scan for outreaches > 24h old still marked `pending`:
+7. **Proactive nudges.** ONCE per session, surface what the system has noticed:
    ```bash
-   . "${HTML_SKILLS_LIB}/outcomes.sh"
-   outcomes::pending_replies 24
+   . "${HTML_SKILLS_LIB}/nudges.sh"
+   nudges::collect_json 24 14
    ```
-   For each: brief ask, then `outcomes::set_outreach_outcome <slug> <run_id> <outcome>` where outcome ∈ `pending|replied|no_reply|meeting_booked|cold`. This is the highest-signal feedback the system gets — two taps and the consolidation pass has gold-standard data for `patterns.json`. Skip if there are none pending.
+   Returns a JSON array of `{kind, text, severity, payload}` entries:
+   - `pending_reply` — for each item in `.payload.items[]`, brief ask: *"John @ Acme (SDR-hiring, 2d): reply / no reply / not yet?"* then `outcomes::set_outreach_outcome "$slug" "$run_id" "$outcome"` with outcome ∈ `pending|replied|no_reply|meeting_booked|cold`.
+   - `drift_down` — particularly relevant for mailmerge: if the cluster you're about to batch on has a down-drift alert, mention it in the plan-approval pause (Step 3) as a caveat. Don't block.
+   - `drift_up` / `stale_consolidation` — low-severity informational.
+
+   Skip the step entirely if `nudges::count` is 0. Silence is the green-light.
 
 ## Step 1: Gather the Inputs
 

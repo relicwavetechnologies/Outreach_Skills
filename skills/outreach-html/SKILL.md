@@ -23,17 +23,19 @@ End-to-end personalized outreach pipeline. Research the target → build a one-o
    - If `research_freshness_score > 0.7` and `last_researched` within 14 days, **skip Step 2's research entirely** and go straight to Step 3 with stored facts.
    - If older, do a quick refresh (Step 2 lite) and run diff mode.
 
-8. **One-tap pending-reply prompt.** ONCE per session (not every skill invocation), check for outreaches that need a status update:
+8. **Proactive nudges.** ONCE per session, surface what the system has noticed (pending replies, drift alerts, stale consolidation):
    ```bash
-   . "${HTML_SKILLS_LIB}/outcomes.sh"
-   outcomes::pending_replies 24
+   . "${HTML_SKILLS_LIB}/nudges.sh"
+   nudges::collect_json 24 14
    ```
-   This emits one JSON line per outreach > 24h old still marked `pending`. For each, ask the user briefly:
-   > *"Quick one before we start — John @ Acme (DMed 2d ago, SDR-hiring angle): reply / no reply / not yet?"*
-   Accept short answers (`y`/`n`/`nyt` or any of: `replied | no_reply | pending | meeting_booked | cold`). Update each (substitute the slug, run_id, and outcome from the JSON line above and the user's reply):
-   ```bash
-   outcomes::set_outreach_outcome "$slug" "$run_id" "$outcome"
-   ```
+   This emits a JSON array of nudges. Each entry has `{kind, text, severity, payload}`. `kind` is one of:
+   - `pending_reply` — outreaches > 24h old still marked `pending`. Payload `.items[]` lists them. For each, briefly ask the user: *"Quick one before we start — John @ Acme (SDR-hiring, 2d ago): reply / no reply / not yet?"* and record their answer via `outcomes::set_outreach_outcome "$slug" "$run_id" "$outcome"`.
+   - `drift_down` — an angle's reply rate dropped ≥ 30% since last consolidation. Surface as a one-line caveat: *"FYI: scale-outbound dropped from 55% to 22% — might be saturated."* Don't block the run.
+   - `drift_up` — same direction up. Just informational.
+   - `stale_consolidation` — patterns.json hasn't been refreshed in > 14 days. Suggest running `patterns.sh consolidate` if the user has spare cycles. Low severity.
+
+   If `nudges::count` returns 0, skip this step entirely. Don't surface "all caught up" — silence IS the green-light.
+
    This is the highest-signal feedback the system gets. Two taps. Then proceed.
 
 ## Step 1: Gather What You Need

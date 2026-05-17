@@ -6,6 +6,47 @@ This project tracks work in **P-numbered iterations** rather than semver — eac
 
 ---
 
+## [P3] — The user-facing capstone: dashboard + nudges  *(landed directly on `main`)*
+
+P0–P2d built the engine. P3 is the surface that turns the engine into something the user can actually see and act on.
+
+### Added
+
+- **`skills/dashboard-html/`** — the meta-view skill. Triggers on "show me the dashboard", "how's outreach going", "what's my status", "rollup", etc. Renders a single self-contained HTML file with:
+  - 4 KPI cards (targets all-time, runs in last 30d, reply rate, pending follow-ups)
+  - Top angles ranked by reply rate (from patterns.json cluster_angle rules)
+  - Section recommendations (from patterns.json section_survival rules)
+  - Pending follow-ups list (from outcomes::pending_replies)
+  - Drift panel — only rendered when patterns.json.drift_alerts is non-empty
+  - Recently researched targets (last 5 by last_researched)
+  - Learn-loop footer: last consolidated, runs analyzed, rules total
+
+  Read-only by design — running the dashboard never modifies state. Forces a `patterns::consolidate` at entry so the view is always fresh.
+
+- **`shared/components/dashboard.html`** — the structural template the dashboard skill fills with placeholder-token substitution. Print + reduced-motion + mobile-responsive rules baked in. Every CSS token verified present in design-tokens.css.
+
+- **`shared/lib/nudges.sh`** — proactive startup prompts. Skills source it at Step 0 and call `nudges::collect_json` to surface what's actionable BEFORE asking the user what they want. Three nudge kinds:
+  - `pending_reply` — outreaches > 24h old still pending. Severity scales with count (1-2=low, 3-6=medium, 7+=high).
+  - `drift_down` / `drift_up` — angle/section drift alerts since last consolidation.
+  - `stale_consolidation` — patterns.json is older than 14 days.
+
+  Public API: `nudges::collect` (plain text), `nudges::collect_json` (structured), `nudges::count`. Silence = green-light; skills don't tell the user "all caught up" when there's nothing to surface.
+
+- **Skill wiring**: `outreach-html` and `mailmerge-html` Step 0 now sources `nudges.sh` and processes its output. The previous bare `outcomes::pending_replies` call is replaced — nudges covers the same case plus drift + staleness. Skip the step entirely when `nudges::count` is 0.
+
+- **`tests/test-nudges.sh`** — 16 assertions covering empty memory → 0 nudges, severity escalation (1 → low, 7 → high), drift nudges synthesized from patterns.json.drift_alerts, stale-consolidation gate, plain-text + JSON forms, count fast-path.
+
+### Test counts
+
+```
+P2d snapshot:  37 + 46 + 28 + 24 + 23 + 28 + 45     = 231 + 47 lint = 278
+P3  snapshot:  37 + 46 + 28 + 24 + 23 + 28 + 16 + 45 = 247 + 47 lint = 294
+                                          ↑
+                                   nudges: 16
+```
+
+---
+
 ## [P2d] — Consolidation pass: the system learns  *(branch: `p2d-consolidation`)*
 
 The loop closes. P0 made deploys reliable, P1 added memory, P2a added volume, P2b added the outcomes signal — but until now nothing was *reading* the outcomes to make future decisions smarter. P2d is that read pass.
