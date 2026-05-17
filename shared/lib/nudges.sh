@@ -146,6 +146,32 @@ PY
     fi
   fi
 
+  # ── 4. Stale voice consolidation ─────────────────────────────────────
+  local vf="${cache}/memory/voice.json"
+  if [ -f "$vf" ] && command -v python3 >/dev/null 2>&1; then
+    local v_content; v_content="$(cat "$vf" 2>/dev/null)"
+    if [ "$v_content" != "{}" ] && [ -n "$v_content" ]; then
+      local v_last
+      v_last="$(jq -r '.last_consolidated // empty' "$vf" 2>/dev/null)"
+      if [ -n "$v_last" ]; then
+        local v_stale
+        v_stale="$(python3 -c "
+import sys, datetime as dt
+last = dt.datetime.strptime(sys.argv[1].replace('Z',''), '%Y-%m-%dT%H:%M:%S').replace(tzinfo=dt.timezone.utc)
+days = int(sys.argv[2])
+delta = dt.datetime.now(dt.timezone.utc) - last
+print('yes' if delta.days >= days else 'no')
+" "$v_last" "$stale_days")"
+        if [ "$v_stale" = "yes" ]; then
+          out="$(jq -nc \
+            --argjson list "$out" \
+            --arg t "voice.json is older than ${stale_days} days — voice.sh consolidate will refresh your learned writing style." \
+            '$list + [{kind:"stale_voice", text:$t, severity:"low", payload:{}}]')"
+        fi
+      fi
+    fi
+  fi
+
   printf "%s\n" "$out"
 }
 

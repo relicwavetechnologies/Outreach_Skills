@@ -125,6 +125,26 @@ Bake corrections into the page before moving on.
 
 ## Step 3: Build The Personalized HTML Page
 
+**Before drafting, consult the learned voice.** `voice::style_directive` returns a short paragraph the LLM should treat as binding context for hero, trojan-horse, and DM prose:
+
+```bash
+. "${HTML_SKILLS_LIB}/voice.sh"
+voice::auto_consolidate 14 >/dev/null 2>&1   # no-op if voice.json is fresh
+style_directive="$(voice::style_directive)"
+```
+
+If `$style_directive` is empty (no usable data yet — typical for the first ~3 outreaches), draft from scratch using `profile.json.brand_voice` only. If non-empty, weave its constraints into the hero, the trojan-horse one-liner, and the suggested DM. Examples of what it returns:
+
+> *"Match the user learned writing voice:*
+> *- Target ~11 words per sentence in DMs.*
+> *- DMs are ~32 words total (tight).*
+> *- Hero headlines: ~8 words.*
+> *- Open DMs with phrasing like: 'saw you', 'quick one', 'john -'.*
+> *- Words the user actually uses: actually, ship, real, one-of-one.*
+> *- Words to avoid: leverage, synergy, circle back."*
+
+The directive's purpose: don't impose a generic "professional but warm" voice. Match what the user actually writes. Stay quiet on dimensions the directive doesn't mention.
+
 Single self-contained `.html` file. Tokens copied from `shared/design-tokens.css`. Google Fonts in `<head>`.
 
 **Section order (all full-viewport, scroll-snap proximity):**
@@ -346,19 +366,28 @@ memory::quick_run skill=outreach-html target_slug="$slug" \
   angle="$angle" otp="$otp_enabled" workflow="$workflow_enabled" \
   url="$url" html_path="$html_path"
 
-# Rich form — adds the section arrays so the consolidation pass can
-# compute section_survival rules. $draft_sections_csv and
-# $shipped_sections_csv are comma-separated lists you populated while
-# building the page.
+# Rich form — adds section arrays AND text samples so consolidation
+# (patterns.sh + voice.sh) has data to learn from. $draft_sections_csv
+# and $shipped_sections_csv are comma-separated lists you populated
+# while building the page. $dm_text / $hero_text / $trojan_text are
+# the actual prose you wrote — pass them as shell variables.
 echo "$(jq -nc \
     --arg rid "$HTML_SKILLS_RUN_ID" --arg sk outreach-html \
     --arg sl "$slug" --arg an "$angle" \
     --arg draft "$draft_sections_csv" --arg ship "$shipped_sections_csv" \
+    --arg dm "$dm_text" --arg hero "$hero_text" --arg trojan "$trojan_text" \
+    --arg started "$started_at" \
     '{run_id:$rid, skill:$sk, target_slug:$sl, angle:$an,
-      draft_sections: ($draft|split(",")|map(select(length>0))),
-      shipped_sections: ($ship|split(",")|map(select(length>0)))}')" \
+      started_at: $started,
+      draft_sections:   ($draft|split(",")|map(select(length>0))),
+      shipped_sections: ($ship|split(",")|map(select(length>0))),
+      dm_text:     (if $dm     == "" then null else $dm     end),
+      hero_text:   (if $hero   == "" then null else $hero   end),
+      trojan_text: (if $trojan == "" then null else $trojan end)}')" \
   | memory::write_run >/dev/null
 ```
+
+**Why these three fields specifically:** they're what `voice.sh` distills into `voice.json` — sentence length, openers, vocabulary, punctuation signature. After ~5 outreaches, future drafts will quietly match your learned tone (target sentence length, preferred openers, words to avoid). Without these in the run records, voice learning has nothing to learn from.
 
 **Why this matters:** tomorrow's run (or `mailmerge-html`'s 20-target batch) reads `past_outreach[]` to avoid repeating angles, and the run record (with `draft_sections` + `shipped_sections`) is what `patterns.json` consolidation distills from. Without these writes, the system can't learn what's working vs. what you keep cutting.
 

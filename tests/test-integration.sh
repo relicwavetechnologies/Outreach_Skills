@@ -39,6 +39,8 @@ export NO_COLOR=1
 . "${LIB}/track.sh"
 # shellcheck source=/dev/null
 . "${LIB}/patterns.sh"
+# shellcheck source=/dev/null
+. "${LIB}/voice.sh"
 # Don't source deploy.sh — invoke as a sub-process like skills do.
 
 memory::init
@@ -359,6 +361,62 @@ for rid_skill in r-present-1:present-html r-plan-1:plan-html \
   got_skill="$(jq -r '.skill' "${SANDBOX}/memory/runs/${rid}.json" 2>/dev/null)"
   assert_eq "$got_skill" "$expected_skill" "P8c.${rid}: ${rid} has .skill = ${expected_skill}"
 done
+
+# ╔═════════════════════════════════════════════════════════════════════╗
+# ║  PHASE 8d — Voice learning closes the loop                          ║
+# ║  Seed an outreach-html run with rich text fields and verify         ║
+# ║  voice::consolidate distills usable signals + style_directive       ║
+# ║  produces guidance future skills can apply.                          ║
+# ╚═════════════════════════════════════════════════════════════════════╝
+echo
+echo "▶ PHASE 8d: voice learning end-to-end"
+
+# Seed three outreach runs with realistic DM / hero / trojan text.
+for i in 1 2 3; do
+  case "$i" in
+    1) dm="Saw you hiring three SDRs. Built a 90-second page on what that could look like with code. Take a look.";;
+    2) dm="Saw the Series A. Built you a tighter page on scale without headcount. 90 seconds, then you tell me.";;
+    3) dm="Quick one — your Greenhouse post hit my radar. Made you a side-by-side. 90 seconds.";;
+  esac
+  jq -nc --arg rid "r-voice-$i" --arg dm "$dm" --arg t "2026-05-1${i}T12:00:00Z" '
+    {run_id:$rid, skill:"outreach-html", started_at:$t, target_slug:"voice-test",
+     dm_text:$dm,
+     hero_text:"Three SDRs to do what code does in an afternoon.",
+     trojan_text:"You are about to spend 400k a year on humans doing what your founders showed could be code."}
+  ' > "${SANDBOX}/memory/runs/r-voice-${i}.json"
+done
+
+voice::consolidate >/dev/null 2>&1
+VOICE_FILE="${SANDBOX}/memory/voice.json"
+assert_file_exists "$VOICE_FILE" "P8d.1: voice.json created after consolidate"
+
+dm_count="$(jq -r '.dm_samples' "$VOICE_FILE")"
+assert_eq "$dm_count" "3" "P8d.2: 3 DM samples"
+
+# avg_sentence_words_dm should be a positive number.
+avg_sent="$(jq -r '.tone_signals.avg_sentence_words_dm' "$VOICE_FILE")"
+case "$avg_sent" in
+  null|0|0.0) fail "P8d.3: avg_sentence_words_dm should be > 0 (got $avg_sent)" ;;
+  *)          pass "P8d.3: avg_sentence_words_dm > 0 (got $avg_sent)" ;;
+esac
+
+# "saw" is in 2/3 DMs → should appear as a preferred opener (≥ 20% threshold).
+prefs="$(jq -r '.openers.preferred | join("|")' "$VOICE_FILE")"
+case "$prefs" in
+  *saw*) pass "P8d.4: 'saw' detected in openers.preferred" ;;
+  *)     fail "P8d.4: 'saw' not detected (got: $prefs)" ;;
+esac
+
+# style_directive should emit a non-empty paragraph the LLM can use.
+sd="$(voice::style_directive)"
+[ -n "$sd" ] && pass "P8d.5: style_directive non-empty (signals are usable)" || fail "P8d.5: empty"
+
+# Tone summary should reference words/sent.
+ts="$(voice::tone_summary)"
+case "$ts" in
+  *"w/sent"*) pass "P8d.6: tone_summary includes w/sent" ;;
+  *) fail "P8d.6: tone_summary missing w/sent (got: $ts)" ;;
+esac
 
 # ╔═════════════════════════════════════════════════════════════════════╗
 # ║  PHASE 9 — Idempotency: re-running phase 2 doesn't dup facts        ║

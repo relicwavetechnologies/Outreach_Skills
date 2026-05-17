@@ -183,26 +183,38 @@ Accept simple edit commands: "use the values-led angle for enterprise-saas", "sk
 
 ## Step 4: Execute (dry-run first if enabled)
 
+**Voice consult — once per batch, before the per-target loop:**
+
+```bash
+. "${HTML_SKILLS_LIB}/voice.sh"
+voice::auto_consolidate 14 >/dev/null 2>&1
+style_directive="$(voice::style_directive)"
+```
+
+If non-empty, treat `$style_directive` as binding context when drafting every target's hero, trojan-horse, and DM. Voice is user-level, not target-level, so this is computed once and applied to all.
+
 For each target NOT marked skipped:
 
 1. **Research** — call the slot-based research engine from `research-html`'s spec (inline; do not require research-html to be installed). Source diversification, confidence scoring, sources captured. Write facts to `targets/<slug>.json` via `memory::add_fact` etc.
-2. **Build insight sections** — Hooks, Trojan-Horse, Why-this-matters, Risk-flags. Top hook = page hero headline. Trojan-horse = subhead + first line of DM.
+2. **Build insight sections** — Hooks, Trojan-Horse, Why-this-matters, Risk-flags. Top hook = page hero headline. Trojan-horse = subhead + first line of DM. Match `$style_directive` for tone, sentence length, openers, vocabulary.
 3. **Generate the HTML page** — same structure as `outreach-html` (OTP gate, hero, we-get-you, problem, workflow comparison if enabled, solution, results, CTA, sources footer).
 4. **Inject tracker (if enabled)** — `track::inject "<html-file>" "<per-target run_id>"`. No-op if `track::is_enabled` is false. Each target gets its own run_id so events route correctly.
 5. **Deploy** — `bash "$DEPLOY_SH" ship "<file>" --project "<user-company>-mailmerge"`. Auth re-verify is handled by deploy.sh. Capture URL from last line of stdout.
-6. **Record** — `memory::add_outreach "$slug" "$run_id" "$url" "$angle" "pending"` AND log the run. Crucially, include `cluster=<cluster-id>` and `draft_sections` / `shipped_sections` in the run record so the next consolidation pass can compute per-cluster angle effectiveness and per-section survival rates:
+6. **Record** — `memory::add_outreach "$slug" "$run_id" "$url" "$angle" "pending"` AND log the run. Include the actual text samples (`dm_text`, `hero_text`, `trojan_text`) so the next consolidation can learn voice. Include `cluster` + section arrays so patterns.sh can compute per-cluster angle effectiveness and per-section survival.
    ```bash
-   memory::quick_run skill=mailmerge-html target_slug="$slug" \
-     angle="$angle" cluster="$cluster" otp=true workflow=true \
-     url="$url"
-   # For rich data (sections shipped, edits made), use the JSON form:
    echo "$(jq -nc \
      --arg rid "$run_id" --arg sk mailmerge-html --arg sl "$slug" \
      --arg an "$angle" --arg cl "$cluster" \
      --arg draft "$draft_sections_csv" --arg ship "$shipped_sections_csv" \
+     --arg dm "$dm_text" --arg hero "$hero_text" --arg trojan "$trojan_text" \
+     --arg started "$started_at" \
      '{run_id:$rid, skill:$sk, target_slug:$sl, angle:$an, cluster:$cl,
-       draft_sections: ($draft|split(",")|map(select(length>0))),
-       shipped_sections: ($ship|split(",")|map(select(length>0)))}')" \
+       started_at: $started,
+       draft_sections:   ($draft|split(",")|map(select(length>0))),
+       shipped_sections: ($ship|split(",")|map(select(length>0))),
+       dm_text:     (if $dm     == "" then null else $dm     end),
+       hero_text:   (if $hero   == "" then null else $hero   end),
+       trojan_text: (if $trojan == "" then null else $trojan end)}')" \
      | memory::write_run >/dev/null
    ```
 

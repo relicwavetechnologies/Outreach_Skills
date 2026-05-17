@@ -28,11 +28,15 @@ Consolidation is no-op if patterns.json is < 7 days old. We force a fresh consol
 . "${HTML_SKILLS_LIB}/memory.sh"
 . "${HTML_SKILLS_LIB}/outcomes.sh"
 . "${HTML_SKILLS_LIB}/patterns.sh"
+. "${HTML_SKILLS_LIB}/voice.sh"
 memory::init
 patterns::consolidate >/dev/null 2>&1 || true
+voice::consolidate    >/dev/null 2>&1 || true
 ```
 
 If consolidation fails (jq/python3 missing, empty memory, whatever) — render the dashboard anyway with whatever data is on disk. Show the failure in the "Learn-loop status" panel rather than aborting.
+
+The dashboard surfaces a small "Voice" card showing `voice::tone_summary` — a one-line snapshot like *"11w/sent · 32w DMs · 8w heros · em-dashes, lowercase sentence-starts"* — so the user can see at a glance what the system has learned about their writing style. Empty string = no voice data yet, which is normal for the first few outreaches.
 
 ## Step 2: Gather the Numbers
 
