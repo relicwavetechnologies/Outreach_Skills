@@ -53,23 +53,72 @@ export default async function handler(req, res) {
     return res.status(204).end();
   }
 
-  // Required fields.
-  const event  = String(body.event  || '').slice(0, 40);
-  const runId  = String(body.run_id || '').slice(0, 200);
-  if (!event || !runId) return res.status(400).json({ error: 'missing event or run_id' });
+  // Event-name allowlist. Reject anything else so we don't accumulate junk.
+  const ALLOWED_EVENTS = new Set([
+    'page_view',
+    'scroll_25', 'scroll_50', 'scroll_75', 'scroll_100',
+    'dwell_30s', 'dwell_60s', 'dwell_180s',
+    'cta_click'
+  ]);
+  const event = String(body.event || '').slice(0, 40);
+  if (!ALLOWED_EVENTS.has(event)) {
+    return res.status(400).json({ error: 'unknown event' });
+  }
 
-  // Build the record. Server adds server-side timestamp + a tiny rate identifier.
+  // run_id format: a generated run ID won't be longer than ~60 chars.
+  // Reject anything wildly off so KV keys don't grow unbounded.
+  const runId = String(body.run_id || '').slice(0, 80);
+  if (!runId || !/^[A-Za-z0-9._:-]+$/.test(runId)) {
+    return res.status(400).json({ error: 'invalid run_id' });
+  }
+
+  // Replay window: drop events whose client-supplied `at` timestamp is more
+  // than 7 days old or more than 1 hour in the future. Clock skew tolerance.
+  let clientAt;
+  try { clientAt = body.at ? new Date(body.at).getTime() : Date.now(); }
+  catch { clientAt = Date.now(); }
+  const now = Date.now();
+  if (isNaN(clientAt)
+      || clientAt < now - 7 * 24 * 3600 * 1000
+      || clientAt > now + 3600 * 1000) {
+    return res.status(400).json({ error: 'timestamp out of window' });
+  }
+
+  // Build the record. Defensive length caps on every string field.
+  // Strip query strings from page/referrer — they sometimes contain emails
+  // or tokens passed via tracking pixels elsewhere.
+  const stripQuery = (s) => {
+    if (!s) return s;
+    const q = s.indexOf('?');
+    return q >= 0 ? s.slice(0, q) : s;
+  };
   const record = {
     event,
     run_id:   runId,
     session:  String(body.session || '').slice(0, 24),
-    page:     String(body.page    || '').slice(0, 400),
-    referrer: body.referrer ? String(body.referrer).slice(0, 400) : null,
-    label:    body.label   ? String(body.label).slice(0, 120)     : undefined,
-    at:       body.at      ? String(body.at).slice(0, 40)         : new Date().toISOString(),
-    received: new Date().toISOString()
+    page:     stripQuery(String(body.page || '')).slice(0, 200),
+    referrer: body.referrer ? stripQuery(String(body.referrer)).slice(0, 200) : null,
+    label:    body.label    ? String(body.label).slice(0, 120)                : undefined,
+    at:       new Date(clientAt).toISOString(),
+    received: new Date(now).toISOString()
   };
   for (const k of Object.keys(record)) if (record[k] === undefined) delete record[k];
+
+  // Per-session rate cap: max 60 events / minute. Best-effort — uses Vercel
+  // KV incr with a 60s TTL. If the increment exceeds the cap, silently drop
+  // (still 204 so the client doesn't retry storms).
+  const RATE_LIMIT_PER_MINUTE = 60;
+  if (record.session) {
+    try {
+      const minuteBucket = Math.floor(now / 60000);
+      const rateKey = `hs:rate:${record.session}:${minuteBucket}`;
+      const count = await kv.incr(rateKey);
+      if (count === 1) await kv.expire(rateKey, 90);
+      if (count > RATE_LIMIT_PER_MINUTE) {
+        return res.status(204).end();
+      }
+    } catch { /* rate-limiting is best-effort; never block writes on failure */ }
+  }
 
   // Append to a per-run list AND a global recent-events list.
   // Use lpush so newest are first; trim to a reasonable size.
@@ -77,8 +126,10 @@ export default async function handler(req, res) {
     await Promise.all([
       kv.lpush(`hs:run:${runId}`, JSON.stringify(record)),
       kv.lpush('hs:recent',       JSON.stringify(record)),
-      kv.ltrim('hs:recent', 0, 9999) // keep last ~10k events globally
+      kv.ltrim('hs:recent', 0, 9999)   // global cap: last ~10k events
     ]);
+    // Per-run cap (keep last 1k events per page to avoid runaway lists).
+    await kv.ltrim(`hs:run:${runId}`, 0, 999);
   } catch (e) {
     return res.status(500).json({ error: 'kv-write-failed' });
   }
