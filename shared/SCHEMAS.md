@@ -206,17 +206,80 @@ Canonical user/company profile. The Markdown `shared/profile.md` is now a human-
 
 ## `memory/voice.json`
 
-Learned writing style. Populated over time by observing what the user keeps vs. cuts.
+Learned writing style. Populated by `shared/lib/voice.sh::consolidate` (which delegates the heavy lifting to `shared/lib/voice_consolidate.py`). Skills read this via `voice::style_directive` and bias their drafting accordingly.
 
 ```json
 {
-  "avg_sentence_words": 11,
-  "preferred_openers": ["Quick one:", "Saw you…"],
-  "rejected_openers": ["I hope this finds you well"],
-  "punctuation_signature": "em-dashes, ellipses, lowercase headers",
-  "last_updated": "2026-05-17T15:32:00Z"
+  "version": 1,
+  "last_consolidated": "2026-05-17T15:32:00Z",
+  "runs_analyzed": 12,
+  "dm_samples": 8,
+  "hero_samples": 6,
+  "trojan_samples": 5,
+  "half_life_days": 30,
+
+  "tone_signals": {
+    "avg_sentence_words_dm":     11.4,
+    "median_sentence_words_dm":  10,
+    "avg_dm_words":              31.7,
+    "avg_hero_words":            8.2,
+    "avg_trojan_words":          17.0,
+    "em_dashes_per_dm":          1.2,
+    "ellipses_per_dm":           0.4,
+    "questions_per_dm":          0.6,
+    "lowercase_start_fraction":  0.45
+  },
+
+  "openers": {
+    "preferred": ["saw you", "quick one", "john -"],
+    "rejected":  ["i hope this finds you well", "wanted to reach out"]
+  },
+
+  "vocabulary": {
+    "use":   ["actually", "ship", "real", "one-of-one"],
+    "avoid": ["leverage", "synergy", "circle back"]
+  },
+
+  "punctuation_signature": "em-dashes, lowercase sentence-starts"
 }
 ```
+
+### How it's filled
+
+Skills that draft prose (`outreach-html`, `mailmerge-html`, optionally `research-html` when it produces DM-style text) MUST emit text samples in their run records when those samples exist:
+
+| Field | What it should contain |
+|---|---|
+| `dm_text`     | the suggested DM (~1-3 sentences) |
+| `hero_text`   | the page hero headline (≤ ~15 words) |
+| `trojan_text` | the trojan-horse one-liner (≤ ~25 words) |
+| `draft_text`  | concatenated drafted prose (optional, larger) |
+| `shipped_text`| concatenated prose that survived editing (optional) |
+
+Skills that don't emit these contribute nothing to voice signals. voice.json degrades gracefully — missing fields don't cause errors, just under-counted samples.
+
+### Time-decay weighting
+
+Recent runs count more. Default half-life is 30 days: a run 30 days old has half the weight of a fresh one; 60 days old, a quarter; etc. Configurable: `voice.sh consolidate --half-life 14`. Runs without timestamps get a neutral 0.5 weight.
+
+### `voice_corrections[]` on a run
+
+Skills can record explicit user corrections in any run's record:
+
+```json
+"voice_corrections": [
+  { "kind": "rejected_opener", "text": "i hope this finds you well" },
+  { "kind": "avoid_word",      "text": "leverage" }
+]
+```
+
+These flow into `voice.json.openers.rejected` and `voice.json.vocabulary.avoid` so the system learns to avoid them deliberately, not just by absence.
+
+### Update discipline
+
+- Only `voice::consolidate` writes `voice.json`. Skills MUST NOT write it directly.
+- Skills MAY call `voice::auto_consolidate 14` at startup — it's a no-op when voice.json is < 14 days old.
+- `voice::reset` clears voice.json but preserves `voice.previous.json` for any future drift work.
 
 ---
 
