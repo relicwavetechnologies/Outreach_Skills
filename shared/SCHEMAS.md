@@ -222,26 +222,95 @@ Learned writing style. Populated over time by observing what the user keeps vs. 
 
 ## `memory/patterns.json`
 
-Distilled rules across all runs. Rewritten by a consolidation pass (P2). Skills read this on startup and use it to bias defaults.
+Distilled rules across all runs. Rewritten by the consolidation pass in `shared/lib/patterns.sh`. Skills read this on startup and use it to bias defaults.
 
 ```json
 {
   "version": 1,
   "last_consolidated": "2026-05-17T15:32:00Z",
+  "runs_analyzed": 47,
+  "decided_outreaches": 22,
   "rules": [
     {
-      "id": "hooks-with-quotes-win",
-      "evidence_runs": 8,
-      "rule": "Hero hooks framed with a public quote from the founder outperform generic-trend framings 4:1 by reply rate"
+      "id":            "angle:series-a-ai:scale-outbound-not-headcount",
+      "kind":          "cluster_angle",
+      "cluster":       "series-a-ai",
+      "angle":         "scale-outbound-not-headcount",
+      "evidence_runs": 12,
+      "decided":       9,
+      "outcomes":      { "replied": 4, "no_reply": 4, "meeting_booked": 1, "pending": 3 },
+      "reply_rate":    0.556,
+      "confidence":    "high"
     },
     {
-      "id": "drop-risk-flags",
-      "evidence_runs": 4,
-      "rule": "User cuts Risk Flags section in 4 of last 4 outreach runs — generate it only on explicit request"
+      "id":             "section:risk_flags",
+      "kind":           "section_survival",
+      "section":        "risk_flags",
+      "evidence_runs":  6,
+      "drafted":        6,
+      "shipped":        1,
+      "survival_rate":  0.167,
+      "recommendation": "skip",
+      "confidence":     "medium"
+    },
+    {
+      "id":                   "engagement:workflow_comparison",
+      "kind":                 "section_engagement",
+      "section":              "workflow_comparison",
+      "reply_rate_with":      0.62,
+      "reply_rate_without":   0.18,
+      "delta":                0.44,
+      "n_with":               13,
+      "n_without":            9,
+      "confidence":           "high"
+    }
+  ],
+  "drift_alerts": [
+    {
+      "kind":                  "angle_drift",
+      "rule_id":               "angle:series-a-ai:scale-outbound-not-headcount",
+      "angle":                 "scale-outbound-not-headcount",
+      "cluster":               "series-a-ai",
+      "previous_reply_rate":   0.55,
+      "current_reply_rate":    0.22,
+      "delta":                 -0.33,
+      "direction":             "down"
     }
   ]
 }
 ```
+
+### Rule kinds
+
+| `kind` | Generated when | Used by |
+|---|---|---|
+| `cluster_angle` | (cluster, angle) pair appears in ≥ 2 runs. `cluster` may be `null` if the run didn't carry a cluster tag — `_any` bucket. | `mailmerge-html` calls `patterns::angle_for_cluster <cluster>` to pick the highest-confidence angle. |
+| `section_survival` | A section name appeared in ≥ 2 draft lists. `survival_rate = shipped / drafted`. Recommendation buckets: `always` (≥ 0.85), `usually` (≥ 0.50), `rarely` (≥ 0.20), `skip` (< 0.20). | `outreach-html` / `research-html` call `patterns::section_recommendation <section>` to decide whether to draft. |
+| `section_engagement` | A section shows ≥ 0.10 absolute reply-rate delta vs runs without it, with at least 2 decided outcomes on each side. | Surfaced in `patterns::report`; informational. |
+
+### Confidence buckets
+
+Determined by evidence count, NOT by p-values (we're working with tiny n's):
+
+- `low` — 2–4 evidence runs
+- `medium` — 5–9 evidence runs
+- `high` — 10+ evidence runs
+- `insufficient` — single observation (rules never emitted at this level)
+
+### Drift alerts
+
+After each consolidation, the previous `patterns.json` is rotated to `patterns.previous.json`. Drift detection compares matching rule IDs:
+
+- **Angle drift**: `reply_rate` moved by ≥ 0.30 absolute between consolidations.
+- **Section drift**: `survival_rate` moved by ≥ 0.30 absolute.
+
+Alerts are written into `patterns.json.drift_alerts[]` and surfaced by `patterns::drift` and `patterns::report`. Skills can read this to caveat their own recommendations ("this angle has been working — but reply rate dropped this week, worth a fresh look").
+
+### Update discipline
+
+- Skills MUST NOT write `patterns.json` directly. Only `patterns::consolidate` writes it.
+- Skills MAY call `patterns::auto_consolidate` at startup — it's a no-op if `last_consolidated` is < 7 days old.
+- `patterns::reset` deletes `patterns.json` but preserves `patterns.previous.json`.
 
 ---
 

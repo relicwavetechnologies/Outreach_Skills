@@ -350,17 +350,29 @@ memory::mark_researched() {
 # ─────────────────────────────────────────────────────────────────────────
 
 # Save a run record from stdin (JSON) or from a file path.
+# The run_id is taken from the JSON's .run_id field when present, falling
+# back to $HTML_SKILLS_RUN_ID, falling back to a generated id. This means
+# callers can write multiple distinct runs from the same shell without
+# having to fiddle with env vars between calls.
 # Returns the path on stdout.
 memory::write_run() {
   local src="${1:-}"
-  local id="${HTML_SKILLS_RUN_ID:-run-$(date -u +%Y%m%d-%H%M%S)-$$}"
+  local content
+  if [ -n "$src" ] && [ -f "$src" ]; then
+    content="$(cat "$src")"
+  else
+    content="$(cat)"
+  fi
+  local id=""
+  if command -v jq >/dev/null 2>&1; then
+    id="$(printf "%s" "$content" | jq -r '.run_id // empty' 2>/dev/null || true)"
+  fi
+  if [ -z "$id" ]; then
+    id="${HTML_SKILLS_RUN_ID:-run-$(date -u +%Y%m%d-%H%M%S)-$$}"
+  fi
   local dest="$(memory::root)/memory/runs/${id}.json"
   mkdir -p "$(dirname "$dest")"
-  if [ -n "$src" ] && [ -f "$src" ]; then
-    cp "$src" "$dest"
-  else
-    cat > "$dest"
-  fi
+  printf "%s" "$content" > "$dest"
   printf "%s\n" "$dest"
 }
 
